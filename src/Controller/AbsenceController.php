@@ -16,4 +16,20 @@ class AbsenceController extends AbstractController
             'path' => 'src/Controller/AbsenceController.php',
         ]);
     }
+
+    #[Route('/api/absences', name: 'absence.getAll', methods:['GET'])]
+    public function getAllAbsences(
+        AbsenceRepository $repository,
+        SerializerInterface $serializer
+        ): JsonResponse
+    {
+        $absence =  $repository->findAll();
+        $jsonAbsence = $serializer->serialize($absence, 'json',["groups" => "getAllAbsences"]);
+        return new JsonResponse(    
+            $jsonAbsence,
+            Response::HTTP_OK, 
+            [], 
+            true
+        );
+    }
 }

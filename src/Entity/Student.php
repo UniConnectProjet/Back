@@ -19,16 +19,19 @@ class Student
      * @var Collection<int, Grade>
      */
     #[ORM\OneToMany(targetEntity: Grade::class, mappedBy: 'student')]
+    #[Groups(['getAllStudents'])]
     private Collection $grades;
 
     /**
      * @var Collection<int, Absence>
      */
     #[ORM\OneToMany(targetEntity: Absence::class, mappedBy: 'student')]
+    #[Groups(['getAllStudents'])]
     private Collection $absences;
 
     #[ORM\ManyToOne(inversedBy: 'students')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['getAllStudents'])]
     private ?Classe $classe = null;
 
     public function __construct()

@@ -16,4 +16,20 @@ class ClasseController extends AbstractController
             'path' => 'src/Controller/ClasseController.php',
         ]);
     }
+    
+    #[Route('/api/classes', name: 'classe.getAll', methods:['GET'])]
+    public function getAllClasses(
+        ClasseRepository $repository,
+        SerializerInterface $serializer
+        ): JsonResponse
+    {
+        $classe =  $repository->findAll();
+        $jsonClasse = $serializer->serialize($course, 'json',["groups" => "getAllClasses"]);
+        return new JsonResponse(    
+            $jsonClasse,
+            Response::HTTP_OK, 
+            [], 
+            true
+        );
+    }
 }
