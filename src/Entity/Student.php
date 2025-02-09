@@ -31,10 +31,17 @@ class Student
     #[ORM\JoinColumn(nullable: false)]
     private ?Classe $classe = null;
 
+    /**
+     * @var Collection<int, Semester>
+     */
+    #[ORM\ManyToMany(targetEntity: Semester::class, mappedBy: 'students')]
+    private Collection $semesters;
+
     public function __construct()
     {
         $this->grades = new ArrayCollection();
         $this->absences = new ArrayCollection();
+        $this->semesters = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -110,6 +117,33 @@ class Student
     public function setClasse(?Classe $classe): static
     {
         $this->classe = $classe;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Semester>
+     */
+    public function getSemesters(): Collection
+    {
+        return $this->semesters;
+    }
+
+    public function addSemester(Semester $semester): static
+    {
+        if (!$this->semesters->contains($semester)) {
+            $this->semesters->add($semester);
+            $semester->addStudent($this);
+        }
+
+        return $this;
+    }
+
+    public function removeSemester(Semester $semester): static
+    {
+        if ($this->semesters->removeElement($semester)) {
+            $semester->removeStudent($this);
+        }
 
         return $this;
     }
