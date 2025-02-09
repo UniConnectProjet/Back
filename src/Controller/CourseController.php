@@ -159,7 +159,62 @@ class CourseController extends AbstractController
         );
     }
 
+    #[Route('/api/course/{id}', name: 'course.delete', methods:['DELETE'])]
+    public function deleteCourse(
+        CourseRepository $repository,
+        int $id
+        ): JsonResponse
+    {
+        $course =  $repository->find($id);
+        $entityManager = $this->getDoctrine()->getManager();
+        $entityManager->remove($course);
+        $entityManager->flush();
+        return new JsonResponse(    
+            null,
+            Response::HTTP_NO_CONTENT, 
+            [], 
+            true
+        );
+    }
 
+    #[Route('/api/course', name: 'course.create', methods:['POST'])]
+    public function createCourse(
+        Request $request,
+        SerializerInterface $serializer
+        ): JsonResponse
+    {
+        $data = $request->getContent();
+        $course = $serializer->deserialize($data, Course::class, 'json');
+        $entityManager = $this->getDoctrine()->getManager();
+        $entityManager->persist($course);
+        $entityManager->flush();
+        return new JsonResponse(    
+            null,
+            Response::HTTP_CREATED, 
+            [], 
+            true
+        );
+    }
 
-
+    #[Route('/api/course/{id}', name: 'course.update', methods:['PUT'])]
+    public function updateCourse(
+        CourseRepository $repository,
+        Request $request,
+        SerializerInterface $serializer,
+        int $id
+        ): JsonResponse
+    {
+        $course =  $repository->find($id);
+        $data = $request->getContent();
+        $serializer->deserialize($data, Course::class, 'json', ['object_to_populate' => $course]);
+        $entityManager = $this->getDoctrine()->getManager();
+        $entityManager->persist($course);
+        $entityManager->flush();
+        return new JsonResponse(    
+            null,
+            Response::HTTP_OK, 
+            [], 
+            true
+        );
+    }
 }
