@@ -34,6 +34,9 @@ class Absence
     #[ORM\ManyToOne(inversedBy: 'absences')]
     private ?Student $student = null;
 
+    #[ORM\ManyToOne(inversedBy: 'absences')]
+    private ?Semester $semester = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -95,6 +98,18 @@ class Absence
     public function setStudent(?Student $student): static
     {
         $this->student = $student;
+
+        return $this;
+    }
+
+    public function getSemester(): ?Semester
+    {
+        return $this->semester;
+    }
+
+    public function setSemester(?Semester $semester): static
+    {
+        $this->semester = $semester;
 
         return $this;
     }

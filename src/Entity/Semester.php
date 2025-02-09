@@ -47,11 +47,18 @@ class Semester
     #[ORM\ManyToMany(targetEntity: Classe::class, inversedBy: 'semesters')]
     private Collection $classes;
 
+    /**
+     * @var Collection<int, Absence>
+     */
+    #[ORM\OneToMany(targetEntity: Absence::class, mappedBy: 'semester')]
+    private Collection $absences;
+
     public function __construct()
     {
         $this->courseUnits = new ArrayCollection();
         $this->students = new ArrayCollection();
         $this->classes = new ArrayCollection();
+        $this->absences = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -169,6 +176,36 @@ class Semester
     public function removeClass(Classe $class): static
     {
         $this->classes->removeElement($class);
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Absence>
+     */
+    public function getAbsences(): Collection
+    {
+        return $this->absences;
+    }
+
+    public function addAbsence(Absence $absence): static
+    {
+        if (!$this->absences->contains($absence)) {
+            $this->absences->add($absence);
+            $absence->setSemester($this);
+        }
+
+        return $this;
+    }
+
+    public function removeAbsence(Absence $absence): static
+    {
+        if ($this->absences->removeElement($absence)) {
+            // set the owning side to null (unless already changed)
+            if ($absence->getSemester() === $this) {
+                $absence->setSemester(null);
+            }
+        }
 
         return $this;
     }

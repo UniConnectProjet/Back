@@ -85,15 +85,17 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades', name: 'grade.add', methods:['POST'])]
-    public function addGrade(
+    #[Route('/api/grades/{studentId}', name: 'grade.addForStudent', methods:['POST'])]
+    public function addGradeForStudent(
         Request $request,
         SerializerInterface $serializer,
-        EntityManagerInterface $em
+        EntityManagerInterface $em,
+        int $studentId
         ): JsonResponse
     {
         $data = $request->getContent();
         $grade = $serializer->deserialize($data, Grade::class, 'json');
+        $grade->setStudent($studentId);
         $em->persist($grade);
         $em->flush();
         return new JsonResponse(
