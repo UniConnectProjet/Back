@@ -106,6 +106,27 @@ class GradeController extends AbstractController
         );
     }
 
+    #[Route('/api/grades/course/{studentId}', name: 'grade.addForCourse', methods:['POST'])]
+    public function addGradeForCourse(
+        Request $request,
+        SerializerInterface $serializer,
+        EntityManagerInterface $em,
+        int $courseId
+        ): JsonResponse
+    {
+        $data = $request->getContent();
+        $grade = $serializer->deserialize($data, Grade::class, 'json');
+        $grade->setCourse($courseId);
+        $em->persist($grade);
+        $em->flush();
+        return new JsonResponse(
+            'Grade added',
+            Response::HTTP_CREATED,
+            [],
+            true
+        );
+    }
+
     #[Route('/api/grades/{studentId}', name: 'grade.update', methods:['PUT'])]
     public function updateGrade(
         Request $request,
