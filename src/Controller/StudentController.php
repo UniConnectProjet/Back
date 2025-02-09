@@ -51,6 +51,40 @@ class StudentController extends AbstractController
         );
     }
 
+    #[Route('/api/students/{id}', name: 'student.getGrades', methods:['GET'])]
+    public function getGradesByStudentId(
+        StudentRepository $repository,
+        SerializerInterface $serializer,
+        int $id
+        ): JsonResponse
+    {
+        $student =  $repository->find($id);
+        $jsonStudent = $serializer->serialize($student, 'json',["groups" => "getAllStudents"]);
+        return new JsonResponse(    
+            $jsonStudent,
+            Response::HTTP_OK, 
+            [], 
+            true
+        );
+    }
+
+    #[Route('/api/students/{id}', name: 'student.getAbsences', methods:['GET'])]
+    public function getAbsencesByStudentId(
+        StudentRepository $repository,
+        SerializerInterface $serializer,
+        int $id
+        ): JsonResponse
+    {
+        $student =  $repository->find($id);
+        $jsonStudent = $serializer->serialize($student, 'json',["groups" => "getAllStudents"]);
+        return new JsonResponse(    
+            $jsonStudent,
+            Response::HTTP_OK, 
+            [], 
+            true
+        );
+    }
+
     #[Route('/api/students', name: 'student.add', methods:['POST'])]
     public function addStudent(
         Request $request,
