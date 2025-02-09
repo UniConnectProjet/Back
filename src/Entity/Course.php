@@ -5,6 +5,7 @@ namespace App\Entity;
 use App\Repository\CourseRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: CourseRepository::class)]
@@ -16,9 +17,11 @@ class Course
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllCourses'])]
     private ?string $name = null;
 
     #[ORM\Column]
+    #[Groups(['getAllCourses'])]
     private ?float $average = null;
 
     /**

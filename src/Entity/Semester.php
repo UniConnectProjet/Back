@@ -5,6 +5,7 @@ namespace App\Entity;
 use App\Repository\SemesterRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -17,12 +18,15 @@ class Semester
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllSemesters'])]
     private ?string $name = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Groups(['getAllSemesters'])]
     private ?\DateTimeInterface $startDate = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Groups(['getAllSemesters'])]
     private ?\DateTimeInterface $endDate = null;
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Repository\GradeRepository;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: GradeRepository::class)]
@@ -14,12 +15,15 @@ class Grade
     private ?int $id = null;
 
     #[ORM\Column]
+    #[Groups(['getAllGrades'])]
     private ?float $grade = null;
 
     #[ORM\Column]
+    #[Groups(['getAllGrades'])]
     private ?float $dividor = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllGrades'])]
     private ?string $title = null;
 
     #[ORM\ManyToOne(inversedBy: 'grades')]

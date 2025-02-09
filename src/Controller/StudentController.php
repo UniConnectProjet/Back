@@ -32,5 +32,81 @@ class StudentController extends AbstractController
             [], 
             true
         );
-    } 
+    }
+
+    #[Route('/api/students/{id}', name: 'student.getOne', methods:['GET'])]
+    public function getOneStudent(
+        StudentRepository $repository,
+        SerializerInterface $serializer,
+        int $id
+        ): JsonResponse
+    {
+        $student =  $repository->find($id);
+        $jsonStudent = $serializer->serialize($student, 'json',["groups" => "getAllStudents"]);
+        return new JsonResponse(    
+            $jsonStudent,
+            Response::HTTP_OK, 
+            [], 
+            true
+        );
+    }
+
+    #[Route('/api/students', name: 'student.add', methods:['POST'])]
+    public function addStudent(
+        Request $request,
+        SerializerInterface $serializer,
+        EntityManagerInterface $em
+        ): JsonResponse
+    {
+        $data = $request->getContent();
+        $student = $serializer->deserialize($data, Student::class, 'json');
+        $em->persist($student);
+        $em->flush();
+        return new JsonResponse(
+            'Student added successfully',
+            Response::HTTP_CREATED,
+            [],
+            true
+        );
+    }
+
+    #[Route('/api/students/{id}', name: 'student.update', methods:['PUT'])]
+    public function updateStudent(
+        Request $request,
+        SerializerInterface $serializer,
+        EntityManagerInterface $em,
+        int $id
+        ): JsonResponse
+    {
+        $student = $repository->find($id);
+        $data = $request->getContent();
+        $student = $serializer->deserialize($data, Student::class, 'json');
+        $em->persist($student);
+        $em->flush();
+        return new JsonResponse(
+            'Student updated successfully',
+            Response::HTTP_OK,
+            [],
+            true
+        );
+    }
+
+    #[Route('/api/students/{id}', name: 'student.delete', methods:['DELETE'])]
+    public function deleteStudent(
+        StudentRepository $repository,
+        EntityManagerInterface $em,
+        int $id
+        ): JsonResponse
+    {
+        $student = $repository->find($id);
+        $em->remove($student);
+        $em->flush();
+        return new JsonResponse(
+            'Student deleted successfully',
+            Response::HTTP_OK,
+            [],
+            true
+        );
+    }
+
 }
