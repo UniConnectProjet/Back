@@ -24,9 +24,16 @@ class Classe
     #[ORM\OneToMany(targetEntity: Student::class, mappedBy: 'classe')]
     private Collection $students;
 
+    /**
+     * @var Collection<int, Semester>
+     */
+    #[ORM\ManyToMany(targetEntity: Semester::class, mappedBy: 'classes')]
+    private Collection $semesters;
+
     public function __construct()
     {
         $this->students = new ArrayCollection();
+        $this->semesters = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -71,6 +78,33 @@ class Classe
             if ($student->getClasse() === $this) {
                 $student->setClasse(null);
             }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Semester>
+     */
+    public function getSemesters(): Collection
+    {
+        return $this->semesters;
+    }
+
+    public function addSemester(Semester $semester): static
+    {
+        if (!$this->semesters->contains($semester)) {
+            $this->semesters->add($semester);
+            $semester->addClass($this);
+        }
+
+        return $this;
+    }
+
+    public function removeSemester(Semester $semester): static
+    {
+        if ($this->semesters->removeElement($semester)) {
+            $semester->removeClass($this);
         }
 
         return $this;

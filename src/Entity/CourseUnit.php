@@ -19,9 +19,6 @@ class CourseUnit
     private ?string $name = null;
 
     #[ORM\Column]
-    private ?int $semester = null;
-
-    #[ORM\Column]
     private ?float $average = null;
 
     /**
@@ -29,6 +26,9 @@ class CourseUnit
      */
     #[ORM\OneToMany(targetEntity: Course::class, mappedBy: 'courseUnit')]
     private Collection $courses;
+
+    #[ORM\ManyToOne(inversedBy: 'courseUnits')]
+    private ?Semester $semester = null;
 
     public function __construct()
     {
@@ -48,18 +48,6 @@ class CourseUnit
     public function setName(string $name): static
     {
         $this->name = $name;
-
-        return $this;
-    }
-
-    public function getSemester(): ?int
-    {
-        return $this->semester;
-    }
-
-    public function setSemester(int $semester): static
-    {
-        $this->semester = $semester;
 
         return $this;
     }
@@ -102,6 +90,18 @@ class CourseUnit
                 $course->setCourseUnit(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getSemester(): ?Semester
+    {
+        return $this->semester;
+    }
+
+    public function setSemester(?Semester $semester): static
+    {
+        $this->semester = $semester;
 
         return $this;
     }
