@@ -31,6 +31,7 @@ class Course
     private Collection $grades;
 
     #[ORM\ManyToOne(inversedBy: 'courses')]
+    #[ORM\JoinColumn(nullable: true)] // Important : nullable pour permettre de dissocier un module
     private ?CourseUnit $courseUnit = null;
 
     public function __construct()

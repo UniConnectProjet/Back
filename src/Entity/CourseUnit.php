@@ -33,6 +33,9 @@ class CourseUnit
     #[ORM\ManyToOne(inversedBy: 'courseUnits')]
     private ?Semester $semester = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?float $averageScore = null;
+
     public function __construct()
     {
         $this->courses = new ArrayCollection();
@@ -105,6 +108,18 @@ class CourseUnit
     public function setSemester(?Semester $semester): static
     {
         $this->semester = $semester;
+
+        return $this;
+    }
+
+    public function getAverageScore(): ?float
+    {
+        return $this->averageScore;
+    }
+
+    public function setAverageScore(?float $averageScore): static
+    {
+        $this->averageScore = $averageScore;
 
         return $this;
     }
