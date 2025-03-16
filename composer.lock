@@ -3561,6 +3561,7 @@
                 "branch-alias": {
                     "dev-main": "3.5-dev"
                 }
+            },
             "require-dev": {
                 "psr/log": "^1|^2|^3",
                 "symfony/config": "^6.4|^7.0",
