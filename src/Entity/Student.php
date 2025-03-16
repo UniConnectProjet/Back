@@ -38,8 +38,9 @@ class Student
     /**
      * @var Collection<int, Semester>
      */
-    #[ORM\ManyToMany(targetEntity: Semester::class, mappedBy: 'students')]
+    #[ORM\ManyToMany(targetEntity: Semester::class, inversedBy: 'students')]
     private Collection $semesters;
+
 
     public function __construct()
     {
