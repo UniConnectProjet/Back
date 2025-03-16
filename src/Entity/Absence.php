@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use App\Repository\AbsenceRepository;
 use Doctrine\DBAL\Types\Types;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: AbsenceRepository::class)]
@@ -15,19 +16,26 @@ class Absence
     private ?int $id = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Groups(['getAllAbsences'])]
     private ?\DateTimeInterface $startedDate = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Groups(['getAllAbsences'])]
     private ?\DateTimeInterface $endedDate = null;
 
     #[ORM\Column]
+    #[Groups(['getAllAbsences'])]
     private ?bool $justified = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllAbsences'])]
     private ?string $justification = null;
 
     #[ORM\ManyToOne(inversedBy: 'absences')]
     private ?Student $student = null;
+
+    #[ORM\ManyToOne(inversedBy: 'absences')]
+    private ?Semester $semester = null;
 
     public function getId(): ?int
     {
@@ -90,6 +98,18 @@ class Absence
     public function setStudent(?Student $student): static
     {
         $this->student = $student;
+
+        return $this;
+    }
+
+    public function getSemester(): ?Semester
+    {
+        return $this->semester;
+    }
+
+    public function setSemester(?Semester $semester): static
+    {
+        $this->semester = $semester;
 
         return $this;
     }
