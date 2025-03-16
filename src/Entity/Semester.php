@@ -35,16 +35,16 @@ class Semester
     #[ORM\OneToMany(targetEntity: CourseUnit::class, mappedBy: 'semesterNew')]
     private Collection $courseUnits;
 
-    /**
-     * @var Collection<int, Student>
-     */
-    #[ORM\ManyToMany(targetEntity: Student::class, inversedBy: 'semesters')]
+    #[ORM\ManyToMany(targetEntity: Student::class, mappedBy: 'semesters')]
+    #[ORM\JoinTable(name: 'semester_student')]
     private Collection $students;
+
 
     /**
      * @var Collection<int, Classe>
      */
     #[ORM\ManyToMany(targetEntity: Classe::class, inversedBy: 'semesters')]
+    #[ORM\JoinTable(name: 'semester_classe')]
     private Collection $classes;
 
     /**
