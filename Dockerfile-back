@@ -1,45 +1,18 @@
-FROM php:8.2-cli
+FROM php:8.2-fpm
 
-# Installer les dépendances système et extensions PHP
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    libpq-dev \
-    libzip-dev \
-    zip \
-    && docker-php-ext-install pdo pdo_mysql pdo_pgsql zip opcache
+    git unzip curl libpq-dev libzip-dev zip \
+    libonig-dev libxml2-dev && \
+    docker-php-ext-install pdo pdo_pgsql zip
 
-# Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Définir le répertoire de travail
-WORKDIR /app
-
-# Copier composer.json pour installer les dépendances
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader
-
-# Copier le reste des fichiers
+WORKDIR /var/www/html
 COPY . .
 
-# Finaliser l'installation Composer
-RUN composer dump-autoload --optimize --no-dev
+RUN git config --global --add safe.directory /var/www/html
+RUN composer install --no-dev --optimize-autoloader --no-scripts
+RUN chown -R www-data:www-data /var/www/html
 
-# Générer un cache optimisé pour la production
-RUN APP_ENV=prod php bin/console cache:clear --no-warmup
-RUN APP_ENV=prod php bin/console cache:warmup
-
-# Définir les permissions
-RUN chown -R www-data:www-data /app
-USER www-data
-
-# Script de démarrage
-RUN echo '#!/bin/sh\n\
-echo "Starting PHP built-in server on port $PORT"\n\
-cd /app/public\n\
-php -S 0.0.0.0:$PORT\n' > /app/start.sh && chmod +x /app/start.sh
-
-# Exposer le port et définir le point d'entrée
-ENV PORT=8080
-EXPOSE 8080
-CMD ["/app/start.sh"]
+EXPOSE 9000
+CMD ["php-fpm"]
