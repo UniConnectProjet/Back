@@ -32,10 +32,14 @@ RUN git config --global --add safe.directory /app
 # Configurer les permissions
 RUN chown -R application:application /app
 
-# Créer le script d'entrée
+# Créer le script d'entrée avec débogage
 RUN echo '#!/bin/bash\n\
-# Remplacer la variable PORT dans la configuration NGINX\n\
-sed -i "s/\${PORT}/$PORT/g" /opt/docker/etc/nginx/vhost.conf\n\
+# Logs de débogage\n\
+echo "Starting application..."\n\
+echo "PORT=$PORT"\n\
+\n\
+# On force NGINX à écouter sur le port 9000\n\
+sed -i "s/listen \${PORT};/listen 9000;/g" /opt/docker/etc/nginx/vhost.conf\n\
 \n\
 # Exécuter les migrations si nécessaire (optionnel)\n\
 # php /app/bin/console doctrine:migrations:migrate --no-interaction\n\
@@ -74,9 +78,9 @@ RUN echo 'server {\n\
     }\n\
 }\n' > /opt/docker/etc/nginx/vhost.conf
 
-# Exposer le port utilisé par Railway
-ENV PORT=8080
-EXPOSE 8080
+# Exposer le port que Railway attend
+ENV PORT=9000
+EXPOSE 9000
 
 # Point d'entrée pour lancer NGINX et PHP-FPM
 ENTRYPOINT ["/entrypoint.sh"]
