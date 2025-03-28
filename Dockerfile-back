@@ -1,7 +1,7 @@
-# Utilise l'image PHP avec FPM
-FROM php:8.2-fpm
+# Utiliser une image qui contient à la fois PHP-FPM et NGINX
+FROM webdevops/php-nginx:8.2
 
-# Installer les dépendances système utiles pour Symfony + extensions PHP (MySQL + PostgreSQL)
+# Installer les dépendances système utiles pour Symfony + extensions PHP
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -14,26 +14,69 @@ RUN apt-get update && apt-get install -y \
     default-mysql-client \
     && docker-php-ext-install pdo pdo_mysql pdo_pgsql zip
 
-# Copier Composer depuis l'image officielle
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
 # Définir le répertoire de travail
-WORKDIR /var/www/html
+WORKDIR /app
 
-# Copier les fichiers du projet dans le répertoire de travail
+# Copier d'abord les fichiers composer pour optimiser le cache
+COPY composer.json composer.lock ./
+RUN if [ -f composer.json ]; then \
+    COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-scripts; \
+    fi
+
+# Puis copier le reste des fichiers du projet
 COPY . .
 
 # Marquer ce dossier comme sûr (évite les erreurs Git)
-RUN git config --global --add safe.directory /var/www/html
+RUN git config --global --add safe.directory /app
 
-# Installer les dépendances (sans dev, sans scripts auto)
-RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-scripts
+# Configurer les permissions
+RUN chown -R application:application /app
 
-# Donner les permissions adéquates
-RUN chown -R www-data:www-data /var/www/html
+# Créer le script d'entrée
+RUN echo '#!/bin/bash\n\
+# Remplacer la variable PORT dans la configuration NGINX\n\
+sed -i "s/\${PORT}/$PORT/g" /opt/docker/etc/nginx/vhost.conf\n\
+\n\
+# Exécuter les migrations si nécessaire (optionnel)\n\
+# php /app/bin/console doctrine:migrations:migrate --no-interaction\n\
+\n\
+# Effacer le cache Symfony (optionnel)\n\
+php /app/bin/console cache:clear --env=prod\n\
+\n\
+# Démarrer le superviseur qui lancera NGINX et PHP-FPM\n\
+exec supervisord\n' > /entrypoint.sh \
+    && chmod +x /entrypoint.sh
 
-# Exposer le port PHP-FPM (utilisé par NGINX en reverse proxy)
-EXPOSE 9000
+# Créer la configuration NGINX
+RUN echo 'server {\n\
+    listen ${PORT};\n\
+    server_name _;\n\
+    root /app/public;\n\
+    index index.php;\n\
+\n\
+    client_max_body_size 100M;\n\
+\n\
+    location / {\n\
+        try_files $uri /index.php$is_args$args;\n\
+    }\n\
+\n\
+    location ~ \.php$ {\n\
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;\n\
+        fastcgi_pass 127.0.0.1:9000;\n\
+        fastcgi_index index.php;\n\
+        include fastcgi_params;\n\
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n\
+        fastcgi_param DOCUMENT_ROOT $document_root;\n\
+    }\n\
+\n\
+    location ~ /\.ht {\n\
+        deny all;\n\
+    }\n\
+}\n' > /opt/docker/etc/nginx/vhost.conf
 
-# Lancer PHP-FPM en mode foreground
-CMD ["php-fpm"]
+# Exposer le port utilisé par Railway
+ENV PORT=8080
+EXPOSE 8080
+
+# Point d'entrée pour lancer NGINX et PHP-FPM
+ENTRYPOINT ["/entrypoint.sh"]
