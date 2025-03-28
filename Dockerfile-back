@@ -23,17 +23,17 @@ WORKDIR /var/www/html
 # Copier les fichiers du projet dans le répertoire de travail
 COPY . .
 
-# Déclare le dossier comme sûr pour Git (évite le warning fatal)
+# Marquer ce dossier comme sûr (évite les erreurs Git)
 RUN git config --global --add safe.directory /var/www/html
 
-# Installer les dépendances SANS les dev et SANS exécuter les scripts (pour éviter MakerBundle, Fixtures, etc.)
+# Installer les dépendances (sans dev, sans scripts auto)
 RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-scripts
 
 # Donner les permissions adéquates
 RUN chown -R www-data:www-data /var/www/html
 
-# Exposer le port utilisé par php-fpm
+# Exposer le port PHP-FPM (utilisé par NGINX en reverse proxy)
 EXPOSE 9000
 
-# Commande par défaut pour démarrer php-fpm
+# Lancer PHP-FPM en mode foreground
 CMD ["php-fpm"]
