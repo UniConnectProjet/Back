@@ -1,41 +1,39 @@
+# Utilise l'image PHP avec FPM
 FROM php:8.2-fpm
 
-# Installer les dépendances nécessaires
+# Installer les dépendances système utiles pour Symfony + extensions PHP (MySQL + PostgreSQL)
 RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    curl \
     libpq-dev \
     libzip-dev \
-    unzip \
     zip \
-    git \
-    curl \
+    libonig-dev \
+    libxml2-dev \
     default-mysql-client \
-    && docker-php-ext-install pdo pdo_mysql zip
+    && docker-php-ext-install pdo pdo_mysql pdo_pgsql zip
 
-# Installer Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Installer Symfony CLI
-RUN curl -sS https://get.symfony.com/cli/installer | bash \
-    && mv /root/.symfony*/bin/symfony /usr/local/bin/symfony
+# Copier Composer depuis l'image officielle
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Définir le répertoire de travail
 WORKDIR /var/www/html
 
-# Copier les fichiers du projet Symfony
+# Copier les fichiers du projet dans le répertoire de travail
 COPY . .
 
-# Installer les dépendances Symfony
-RUN COMPOSER_ALLOW_SUPERUSER=1 composer install
-RUN COMPOSER_ALLOW_SUPERUSER=1 composer update
-RUN COMPOSER_ALLOW_SUPERUSER=1 composer require nelmio/cors-bundle
-RUN COMPOSER_ALLOW_SUPERUSER=1 composer require --dev doctrine/doctrine-fixtures-bundle
+# Déclare le dossier comme sûr pour Git (évite le warning fatal)
+RUN git config --global --add safe.directory /var/www/html
 
-# Donner les permissions nécessaires
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
+# Installer les dépendances SANS les dev et SANS exécuter les scripts (pour éviter MakerBundle, Fixtures, etc.)
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-scripts
 
-# Exposer le port utilisé par Symfony CLI
-EXPOSE 8000
+# Donner les permissions adéquates
+RUN chown -R www-data:www-data /var/www/html
 
-# Commande par défaut pour démarrer Symfony
-CMD ["symfony", "serve", "--no-tls", "--port=8000", "--allow-all-ip"]
+# Exposer le port utilisé par php-fpm
+EXPOSE 9000
+
+# Commande par défaut pour démarrer php-fpm
+CMD ["php-fpm"]
