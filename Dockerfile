@@ -4,7 +4,7 @@ FROM php:8.2-fpm
 # Installer les dépendances nécessaires
 RUN apt-get update && apt-get install -y \
     libpq-dev git unzip libzip-dev curl zip \
-    && docker-php-ext-install pdo_pgsql zip opcache
+    && docker-php-ext-install pdo_pgsql pgsql zip opcache
 
 # Installer Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
