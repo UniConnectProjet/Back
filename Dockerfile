@@ -4,7 +4,7 @@ FROM php:8.2-fpm
 # Installer les dépendances nécessaires
 RUN apt-get update && apt-get install -y \
     libpq-dev git unzip libzip-dev curl zip \
-    && docker-php-ext-install pdo_pgsql pgsql zip opcache
+    && docker-php-ext-install pdo_pgsql zip opcache
 
 # Installer Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -14,6 +14,9 @@ RUN useradd -m -u 1000 symfony
 
 # Définir le dossier de travail
 WORKDIR /var/www/html
+
+# Créer les dossiers nécessaires (var/cache et var/log)
+RUN mkdir -p var/cache var/log && chown -R symfony:symfony var && chmod -R 775 var && chmod -R 777 var/cache var/log
 
 # Copier les fichiers de l'application
 COPY . .
