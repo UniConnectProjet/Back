@@ -1,10 +1,10 @@
 # Utilise PHP 8.2 avec FPM
 FROM php:8.2-fpm
 
-# Installer les dépendances nécessaires
+# Installer les dépendances nécessaires pour MySQL
 RUN apt-get update && apt-get install -y \
-    libpq-dev git unzip libzip-dev curl zip \
-    && docker-php-ext-install pdo_pgsql zip opcache
+    libmysqlclient-dev git unzip libzip-dev curl zip \
+    && docker-php-ext-install pdo_mysql zip opcache
 
 # Installer Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
