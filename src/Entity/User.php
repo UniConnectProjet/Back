@@ -42,7 +42,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      * @var string The hashed password
      */
     #[ORM\Column]
-    #[Groups(['getAllSemesters'])]
     private ?string $password = null;
 
     public function getId(): ?int

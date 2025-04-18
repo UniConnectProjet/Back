@@ -38,9 +38,9 @@ class Student
     /**
      * @var Collection<int, Semester>
      */
-    #[ORM\ManyToMany(targetEntity: Semester::class, inversedBy: 'students')]
+    #[ORM\ManyToMany(targetEntity: Semester::class, mappedBy: 'students')]
+    #[Groups(['getAllStudents'])]
     private Collection $semesters;
-
 
     public function __construct()
     {
@@ -75,7 +75,6 @@ class Student
     public function removeGrade(Grade $grade): static
     {
         if ($this->grades->removeElement($grade)) {
-            // set the owning side to null (unless already changed)
             if ($grade->getStudent() === $this) {
                 $grade->setStudent(null);
             }
@@ -105,7 +104,6 @@ class Student
     public function removeAbsence(Absence $absence): static
     {
         if ($this->absences->removeElement($absence)) {
-            // set the owning side to null (unless already changed)
             if ($absence->getStudent() === $this) {
                 $absence->setStudent(null);
             }
