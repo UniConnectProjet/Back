@@ -15,15 +15,15 @@ class Grade
     private ?int $id = null;
 
     #[ORM\Column]
-    #[Groups(['getAllGrades'])]
+    #[Groups(['getAllGrades', 'getAllStudents'])]
     private ?float $grade = null;
 
     #[ORM\Column]
-    #[Groups(['getAllGrades'])]
+    #[Groups(['getAllGrades', 'getAllStudents'])]
     private ?float $dividor = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllGrades'])]
+    #[Groups(['getAllGrades', 'getAllStudents'])]
     private ?string $title = null;
 
     #[ORM\ManyToOne(inversedBy: 'grades')]

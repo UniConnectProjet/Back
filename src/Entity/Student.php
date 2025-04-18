@@ -42,6 +42,10 @@ class Student
     #[Groups(['getAllStudents'])]
     private Collection $semesters;
 
+    #[ORM\OneToOne(inversedBy: 'student', cascade: ['persist', 'remove'])]
+    #[Groups(['getAllStudents'])]
+    private ?User $user = null;
+
     public function __construct()
     {
         $this->grades = new ArrayCollection();
@@ -147,6 +151,18 @@ class Student
         if ($this->semesters->removeElement($semester)) {
             $semester->removeStudent($this);
         }
+
+        return $this;
+    }
+
+    public function getUser(): ?User
+    {
+        return $this->user;
+    }
+
+    public function setUser(?User $user): static
+    {
+        $this->user = $user;
 
         return $this;
     }
