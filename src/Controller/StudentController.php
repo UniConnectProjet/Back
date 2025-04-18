@@ -6,9 +6,19 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Repository\StudentRepository;
+use Symfony\Component\Serializer\SerializerInterface;
 
 class StudentController extends AbstractController
 {
+
+    private StudentRepository $repository;
+    private SerializerInterface $serializer;
+
+    public function __construct(StudentRepository $repository, SerializerInterface $serializer)
+    {
+        $this->repository = $repository;
+        $this->serializer = $serializer;
+    }
     #[Route('/student', name: 'app_student')]
     public function index(): JsonResponse
     {
@@ -18,17 +28,15 @@ class StudentController extends AbstractController
         ]);
     }
 
+
     #[Route('/api/students', name: 'student.getAll', methods:['GET'])]
-    public function getAllStudents(
-        StudentRepository $repository,
-        SerializerInterface $serializer
-        ): JsonResponse
+    public function getAllStudents(): JsonResponse
     {
-        $student =  $repository->findAll();
-        $jsonStudents = $serializer->serialize($student, 'json',["groups" => "getAllStudents"]);
+        $student =  $this->repository->findAll();
+        $jsonStudents = $this->serializer->serialize($student, 'json',["groups" => "getAllStudents"]);
         return new JsonResponse(    
             $jsonStudents,
-            Response::HTTP_OK, 
+            JsonResponse::HTTP_OK, 
             [], 
             true
         );
