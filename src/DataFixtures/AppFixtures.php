@@ -50,7 +50,7 @@ class AppFixtures extends Fixture
 
         // Créer des Users
         $users = [];
-        for ($i = 0; $i < 5; $i++) {
+        for ($i = 0; $i < 10; $i++) { // Augmenté à 10 pour correspondre au nombre d'étudiants
             $user = new User();
             $user->setName($faker->firstName);
             $user->setLastname($faker->lastName);
@@ -62,14 +62,16 @@ class AppFixtures extends Fixture
             $users[] = $user;
         }
 
-        // Créer des Students
+        // Créer des Students et les lier aux Users
         $students = [];
         for ($i = 0; $i < 10; $i++) {
             $student = new Student();
             $student->setClasse($classes[array_rand($classes)]);
+            $student->setUser($users[$i]); // Association de l'étudiant à l'utilisateur
+            
             foreach ($semesters as $semester) {
                 $student->addSemester($semester);
-            }
+            } 
             $manager->persist($student);
             $students[] = $student;
         }

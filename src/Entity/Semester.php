@@ -8,6 +8,7 @@ use Doctrine\Common\Collections\Collection;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\Student;
 
 #[ORM\Entity(repositoryClass: SemesterRepository::class)]
 class Semester
@@ -35,10 +36,11 @@ class Semester
     #[ORM\OneToMany(targetEntity: CourseUnit::class, mappedBy: 'semesterNew')]
     private Collection $courseUnits;
 
-    #[ORM\ManyToMany(targetEntity: Student::class, mappedBy: 'semesters')]
-    #[ORM\JoinTable(name: 'semester_student')]
+    /**
+     * @var Collection<int, Student>
+     */
+    #[ORM\ManyToMany(targetEntity: Student::class, inversedBy: 'semesters')]
     private Collection $students;
-
 
     /**
      * @var Collection<int, Classe>
@@ -123,7 +125,6 @@ class Semester
     public function removeCourseUnit(CourseUnit $courseUnit): static
     {
         if ($this->courseUnits->removeElement($courseUnit)) {
-            // set the owning side to null (unless already changed)
             if ($courseUnit->getSemesterNew() === $this) {
                 $courseUnit->setSemesterNew(null);
             }
@@ -144,6 +145,7 @@ class Semester
     {
         if (!$this->students->contains($student)) {
             $this->students->add($student);
+            $student->addSemester($this); // synchronisation bidirectionnelle
         }
 
         return $this;
@@ -151,7 +153,9 @@ class Semester
 
     public function removeStudent(Student $student): static
     {
-        $this->students->removeElement($student);
+        if ($this->students->removeElement($student)) {
+            $student->removeSemester($this); // synchronisation bidirectionnelle
+        }
 
         return $this;
     }
@@ -201,7 +205,6 @@ class Semester
     public function removeAbsence(Absence $absence): static
     {
         if ($this->absences->removeElement($absence)) {
-            // set the owning side to null (unless already changed)
             if ($absence->getSemester() === $this) {
                 $absence->setSemester(null);
             }

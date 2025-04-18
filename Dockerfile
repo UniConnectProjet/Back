@@ -3,7 +3,7 @@ FROM php:8.2-fpm
 
 # Installer les dépendances nécessaires pour MySQL
 RUN apt-get update && apt-get install -y \
-    libmysqlclient-dev git unzip libzip-dev curl zip \
+    git unzip libzip-dev curl zip \
     && docker-php-ext-install pdo_mysql zip opcache
 
 # Installer Composer

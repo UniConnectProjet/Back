@@ -20,16 +20,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllStudents'])]
     private ?string $name = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllStudents'])]
     private ?string $lastname = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $birthday = null;
 
     #[ORM\Column(length: 180)]
-    #[Groups(['getAllSemesters'])]
+    #[Groups(['getAllSemesters', 'getAllStudents'])]
     private ?string $email = null;
 
     /**
@@ -42,8 +44,10 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      * @var string The hashed password
      */
     #[ORM\Column]
-    #[Groups(['getAllSemesters'])]
     private ?string $password = null;
+
+    #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
+    private ?Student $student = null;
 
     public function getId(): ?int
     {
@@ -152,6 +156,28 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function setBirthday(\DateTimeInterface $birthday): static
     {
         $this->birthday = $birthday;
+
+        return $this;
+    }
+
+    public function getStudent(): ?Student
+    {
+        return $this->student;
+    }
+
+    public function setStudent(?Student $student): static
+    {
+        // unset the owning side of the relation if necessary
+        if ($student === null && $this->student !== null) {
+            $this->student->setUser(null);
+        }
+
+        // set the owning side of the relation if necessary
+        if ($student !== null && $student->getUser() !== $this) {
+            $student->setUser($this);
+        }
+
+        $this->student = $student;
 
         return $this;
     }

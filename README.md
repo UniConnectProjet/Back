@@ -63,7 +63,10 @@ Ce guide explique comment démarrer le backend de l'application avec Docker et P
 
     ```bash
         cd ../Back
-        docker exec -it symfony_app php bin/console doctrine:migrations:migrate
+        docker exec -it symfony_app php bin/console
+        php bin/console make:migration
+        php bin/console doctrine:migrations:migrate
+        php bin/console doctrine:fixtures:load
     ```
     Cette commande appliquera les migrations pour mettre à jour le schéma de la base de données selon les entités définies dans le projet.
 

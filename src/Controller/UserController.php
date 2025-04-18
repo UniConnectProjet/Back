@@ -35,9 +35,4 @@ class UserController extends AbstractController
         );
     }
 
-    #[Route('/api/login', name: 'api_login', methods: ['POST'])]
-    public function login(): JsonResponse
-    {
-        return new JsonResponse(['message' => 'Login successful']);
-    }
 }
