@@ -15,21 +15,22 @@ class Grade
     private ?int $id = null;
 
     #[ORM\Column]
-    #[Groups(['getAllGrades', 'getAllStudents'])]
+    #[Groups(['getAllGrades', 'getAllStudents', 'getStudentGrades'])]
     private ?float $grade = null;
 
     #[ORM\Column]
-    #[Groups(['getAllGrades', 'getAllStudents'])]
+    #[Groups(['getAllGrades', 'getAllStudents', 'getStudentGrades'])]
     private ?float $dividor = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllGrades', 'getAllStudents'])]
+    #[Groups(['getAllGrades', 'getAllStudents', 'getStudentGrades'])]
     private ?string $title = null;
 
     #[ORM\ManyToOne(inversedBy: 'grades')]
     private ?Student $student = null;
 
     #[ORM\ManyToOne(inversedBy: 'grades')]
+    #[Groups(['getStudentGrades'])]
     private ?Course $course = null;
 
     public function getId(): ?int

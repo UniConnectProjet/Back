@@ -20,14 +20,14 @@ class Student
      * @var Collection<int, Grade>
      */
     #[ORM\OneToMany(targetEntity: Grade::class, mappedBy: 'student')]
-    #[Groups(['getAllStudents'])]
+    #[Groups(['getAllStudents', 'getStudentGrades'])]
     private Collection $grades;
 
     /**
      * @var Collection<int, Absence>
      */
     #[ORM\OneToMany(targetEntity: Absence::class, mappedBy: 'student')]
-    #[Groups(['getAllStudents'])]
+    #[Groups(['getAllStudents', 'getStudentAbsences'])]
     private Collection $absences;
 
     #[ORM\ManyToOne(inversedBy: 'students')]

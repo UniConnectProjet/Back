@@ -28,12 +28,12 @@ Ce guide explique comment démarrer le backend de l'application avec Docker et P
 
    Exemple de configuration :
    ```bash
-        DATABASE_URL="postgresql://symfony:symfony@db:5432/symfony?serverVersion=15.12"
+        DATABASE_URL="mysql://symfony:symfony@db:3306/symfony"
    ```
-   - symfony : L'utilisateur PostgreSQL.
-   - symfony : Le mot de passe PostgreSQL.
-   - db : Le nom du service PostgreSQL dans le fichier docker-compose.yml.
-   - 5432 : Le port d'écoute de PostgreSQL.
+   - symfony : L'utilisateur.
+   - symfony : Le mot de passe.
+   - db : Le nom du service Mysql dans le fichier docker-compose.yml.
+   - 3306 : Le port d'écoute de MySQL.
    - symfony : Le nom de la base de données à utiliser.
 
 3. **Démarrer les conteneurs Docker**
