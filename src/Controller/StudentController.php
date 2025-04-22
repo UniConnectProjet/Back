@@ -2,6 +2,9 @@
 
 namespace App\Controller;
 
+use App\Entity\Student;
+use App\Entity\Classe;
+
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -9,7 +12,10 @@ use App\Repository\StudentRepository;
 use App\Repository\ClasseRepository;
 use App\Repository\UserRepository;
 use App\Repository\SemesterRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
+
+use Symfony\Component\HttpFoundation\Request;
 
 class StudentController extends AbstractController
 {
