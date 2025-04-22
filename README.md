@@ -1,6 +1,6 @@
 # Backend Setup
 
-Ce guide explique comment démarrer le backend de l'application avec Docker et PostgreSQL.
+Ce guide explique comment démarrer le backend de l'application avec Docker.
 
 ## Prérequis
 
