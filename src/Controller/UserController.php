@@ -18,14 +18,17 @@ class UserController extends AbstractController
     private UserRepository $repository;
     private SerializerInterface $serializer;
     private UserPasswordHasherInterface $passwordHasher;
-    
 
-    public function __construct(UserRepository $repository, SerializerInterface $serializer, UserPasswordHasherInterface $passwordHasher)
-    {
+    public function __construct(
+        UserRepository $repository,
+        SerializerInterface $serializer,
+        UserPasswordHasherInterface $passwordHasher,
+    ) {
         $this->repository = $repository;
         $this->serializer = $serializer;
         $this->passwordHasher = $passwordHasher;
     }
+
     #[Route('/user', name: 'app_user')]
     public function index(): JsonResponse
     {
@@ -48,19 +51,21 @@ class UserController extends AbstractController
         );
     }
 
-    #[Route('/api/user/{id}', name: 'user.getOne', methods:['GET'])]
-    public function getOneUser(
-        int $id
-        ): JsonResponse
+    #[Route('/api/user/{email}', name: 'user.get', methods: ['GET'])]
+    public function getUserId(string $email): JsonResponse
     {
-        $user =  $this->repository->find($id);
-        $jsonUser = $this->serializer->serialize($user, 'json',["groups" => "getUser"]);
-        return new JsonResponse(    
-            $jsonUser,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+        $currentUser = $this->getUser(); // AbstractController fournit cette méthode
+
+        if (!$currentUser || $currentUser->getUserIdentifier() !== $email) {
+            return new JsonResponse(['error' => 'Unauthorized'], JsonResponse::HTTP_UNAUTHORIZED);
+        }
+
+        $user = $this->repository->findOneBy(['email' => $email]);
+        if (!$user) {
+            return new JsonResponse(['error' => 'User not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        return $this->json(['id' => $user->getId()]);
     }
 
     #[Route('/api/user', name: 'user.create', methods:['POST'])]
@@ -123,7 +128,9 @@ class UserController extends AbstractController
         $user->setName($data['name']);
         $user->setLastname($data['lastname']);
         $user->setEmail($data['email']);
-        $user->setPassword($data['password']);
+        $hashedPassword = $this->passwordHasher->hashPassword($user, $data['password']);
+        $user->setPassword($hashedPassword);
+        $user->setBirthday(new \DateTime($data['birthday']));
         $this->repository->save($user, true);
         return new JsonResponse(
             ['message' => 'User updated'],
