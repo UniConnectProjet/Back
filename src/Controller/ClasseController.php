@@ -2,9 +2,17 @@
 
 namespace App\Controller;
 
+use App\Entity\Classe;
+use App\Entity\Student;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
+use App\Repository\ClasseRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Serializer\SerializerInterface;
+
 
 class ClasseController extends AbstractController
 {
@@ -24,10 +32,10 @@ class ClasseController extends AbstractController
         ): JsonResponse
     {
         $classe =  $repository->findAll();
-        $jsonClasse = $serializer->serialize($course, 'json',["groups" => "getAllClasses"]);
+        $jsonClasse = $serializer->serialize($classe, 'json',["groups" => "getAllClasses"]);
         return new JsonResponse(    
             $jsonClasse,
-            Response::HTTP_OK, 
+            JsonResponse::HTTP_OK, 
             [], 
             true
         );
@@ -41,89 +49,35 @@ class ClasseController extends AbstractController
         ): JsonResponse
     {
         $classe =  $repository->find($classeId);
-        $jsonClasse = $serializer->serialize($classe, 'json',["groups" => "getAllClasses"]);
+        $jsonClasse = $serializer->serialize($classe, 'json',["groups" => "getStudentsByClassId"]);
         return new JsonResponse(    
             $jsonClasse,
-            Response::HTTP_OK, 
+            JsonResponse::HTTP_OK, 
             [], 
             true
         );
     }
 
-    #[Route('/api/classes/{studentId}', name: 'classe.addStudent', methods:['POST'])]
+    #[Route('/api/classes/{classId}/students/{studentId}', name: 'class.addStudent', methods:['POST'])]
     public function addStudentToClass(
-        Request $request,
-        SerializerInterface $serializer,
+        int $classId,
+        int $studentId,
         EntityManagerInterface $em
-        ): JsonResponse
-    {
-        $data = $request->getContent();
-        $student = $serializer->deserialize($data, Student::class, 'json');
-        $em->persist($student);
-        $em->flush();
-        return new JsonResponse(
-            $serializer->serialize($student, 'json'),
-            Response::HTTP_CREATED,
-            [],
-            true
-        );
-    }
+    ): JsonResponse {
+        $class = $em->getRepository(Classe::class)->find($classId);
+        if (!$class) {
+            return new JsonResponse(['error' => 'Class not found'], Response::HTTP_NOT_FOUND);
+        }
 
-    #[Route('/api/classes/{classeId}/{studentId}', name: 'classe.removeStudent', methods:['DELETE'])]
-    public function removeStudentFromClass(
-        Request $request,
-        SerializerInterface $serializer,
-        EntityManagerInterface $em
-        ): JsonResponse
-    {
-        $data = $request->getContent();
-        $student = $serializer->deserialize($data, Student::class, 'json');
-        $em->remove($student);
-        $em->flush();
-        return new JsonResponse(
-            $serializer->serialize($student, 'json'),
-            Response::HTTP_CREATED,
-            [],
-            true
-        );
-    }
+        $student = $em->getRepository(Student::class)->find($studentId);
+        if (!$student) {
+            return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+        }
 
-    #[Route('/api/classes/{classeId}', name: 'classe.update', methods:['PUT'])]
-    public function updateClasse(
-        Request $request,
-        SerializerInterface $serializer,
-        EntityManagerInterface $em,
-        int $classeId
-        ): JsonResponse
-    {
-        $data = $request->getContent();
-        $classe = $serializer->deserialize($data, Classe::class, 'json');
-        $classe->setClasse($classeId);
-        $em->persist($classe);
+        $class->addStudent($student);
+        $em->persist($class);
         $em->flush();
-        return new JsonResponse(
-            'Classe updated',
-            Response::HTTP_OK,
-            [],
-            true
-        );
-    }
 
-    #[Route('/api/classes/{classeId}', name: 'classe.delete', methods:['DELETE'])]
-    public function deleteClasse(
-        ClasseRepository $repository,
-        EntityManagerInterface $em,
-        int $classeId
-        ): JsonResponse
-    {
-        $classe = $repository->find($classeId);
-        $em->remove($classe);
-        $em->flush();
-        return new JsonResponse(
-            'Classe deleted',
-            Response::HTTP_OK,
-            [],
-            true
-        );
+        return new JsonResponse(['message' => 'Student added to class successfully'], JsonResponse::HTTP_OK);
     }
 }

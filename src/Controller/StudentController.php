@@ -3,7 +3,6 @@
 namespace App\Controller;
 
 use App\Entity\Student;
-use App\Entity\Classe;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;

@@ -43,7 +43,7 @@ class Student
     private Collection $semesters;
 
     #[ORM\OneToOne(inversedBy: 'student', cascade: ['persist', 'remove'])]
-    #[Groups(['getAllStudents'])]
+    #[Groups(['getAllStudents', 'getStudentsByClassId'])]
     private ?User $user = null;
 
     public function __construct()

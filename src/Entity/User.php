@@ -20,11 +20,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllStudents', 'getAllUsers', 'getUser'])]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId'])]
     private ?string $name = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllStudents', 'getAllUsers', 'getUser'])]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId'])]
     private ?string $lastname = null;
 
     #[ORM\Column(type: Types::DATE_MUTABLE)]
