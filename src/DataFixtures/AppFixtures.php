@@ -30,7 +30,7 @@ class AppFixtures extends Fixture
 
         // Créer des Classes
         $classes = [];
-        for ($i = 0; $i < 3; $i++) {
+        for ($i = 0; $i < 5; $i++) {
             $classe = new Classe();
             $classe->setName($faker->word);
             $manager->persist($classe);
@@ -50,7 +50,7 @@ class AppFixtures extends Fixture
 
         // Créer des Users
         $users = [];
-        for ($i = 0; $i < 10; $i++) { // Augmenté à 10 pour correspondre au nombre d'étudiants
+        for ($i = 0; $i < 50; $i++) { // Augmenté à 50 pour correspondre au nombre d'étudiants
             $user = new User();
             $user->setName($faker->firstName);
             $user->setLastname($faker->lastName);
@@ -64,14 +64,21 @@ class AppFixtures extends Fixture
 
         // Créer des Students et les lier aux Users
         $students = [];
-        for ($i = 0; $i < 10; $i++) {
+        $studentsPerClass = 10;
+
+        for ($i = 0; $i < count($users); $i++) {
             $student = new Student();
-            $student->setClasse($classes[array_rand($classes)]);
+
+            // Répartition équitable : 0–9 dans classe[0], 10–19 dans classe[1], etc.
+            $classIndex = intdiv($i, $studentsPerClass);
+            $student->setClasse($classes[$classIndex]);
+
             $student->setUser($users[$i]); // Association de l'étudiant à l'utilisateur
-            
+
             foreach ($semesters as $semester) {
                 $student->addSemester($semester);
-            } 
+            }
+
             $manager->persist($student);
             $students[] = $student;
         }
@@ -121,7 +128,9 @@ class AppFixtures extends Fixture
             $absence->setStartedDate($faker->dateTimeThisYear);
             $absence->setEndedDate($faker->dateTimeThisYear);
             $absence->setJustified($faker->boolean);
-            $absence->setJustification($faker->sentence);
+            if($absence->setJustified($faker->boolean) != false){
+                $absence->setJustification($faker->sentence);
+            }
             $absence->setSemester($semesters[array_rand($semesters)]);
             $manager->persist($absence);
         }

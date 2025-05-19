@@ -4,8 +4,13 @@ namespace App\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Repository\GradeRepository;
+use App\Entity\Grade;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Doctrine\ORM\EntityManagerInterface;
 
 class GradeController extends AbstractController
 {
@@ -34,7 +39,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/{studentId}', name: 'grade.getOne', methods:['GET'])]
+    #[Route('/api/grades/student/{studentId}', name: 'grade.getOne', methods:['GET'])]
     public function getGradesByStudentId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -51,7 +56,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/{courseId}', name: 'grade.getOne', methods:['GET'])]
+    #[Route('/api/grades/course/{courseId}', name: 'grade.getOne', methods:['GET'])]
     public function getGradesByCourseId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -68,7 +73,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/{semesterId}', name: 'grade.getOne', methods:['GET'])]
+    #[Route('/api/grades/semester/{semesterId}', name: 'grade.getOne', methods:['GET'])]
     public function getGradesBySemesterId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -85,7 +90,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/{studentId}', name: 'grade.addForStudent', methods:['POST'])]
+    #[Route('/api/grade/student/{studentId}', name: 'grade.addForStudent', methods:['POST'])]
     public function addGradeForStudent(
         Request $request,
         SerializerInterface $serializer,

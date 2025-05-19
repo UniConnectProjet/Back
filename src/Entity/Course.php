@@ -17,11 +17,11 @@ class Course
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllCourses'])]
+    #[Groups(['getAllCourses', 'getAllStudents', 'getStudentGrades'])]
     private ?string $name = null;
 
     #[ORM\Column]
-    #[Groups(['getAllCourses'])]
+    #[Groups(['getAllCourses', 'getAllStudents', 'getStudentGrades'])]
     private ?float $average = null;
 
     /**

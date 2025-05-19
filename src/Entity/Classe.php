@@ -24,6 +24,7 @@ class Classe
      * @var Collection<int, Student>
      */
     #[ORM\OneToMany(targetEntity: Student::class, mappedBy: 'classe')]
+    #[Groups(['getStudentsByClassId'])]
     private Collection $students;
 
     /**

@@ -16,15 +16,15 @@ class Absence
     private ?int $id = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
-    #[Groups(['getAllAbsences', 'getAllStudents'])]
+    #[Groups(['getAllAbsences', 'getAllStudents', 'getStudentAbsences'])]
     private ?\DateTimeInterface $startedDate = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
-    #[Groups(['getAllAbsences', 'getAllStudents'])]
+    #[Groups(['getAllAbsences', 'getAllStudents', 'getStudentAbsences'])]
     private ?\DateTimeInterface $endedDate = null;
 
     #[ORM\Column]
-    #[Groups(['getAllAbsences', 'getAllStudents'])]
+    #[Groups(['getAllAbsences', 'getAllStudents', 'getStudentAbsences'])]
     private ?bool $justified = null;
 
     #[ORM\Column(length: 255)]
