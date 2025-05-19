@@ -34,9 +34,16 @@ class Course
     #[ORM\JoinColumn(nullable: true)] // Important : nullable pour permettre de dissocier un module
     private ?CourseUnit $courseUnit = null;
 
+    /**
+     * @var Collection<int, Classe>
+     */
+    #[ORM\ManyToMany(targetEntity: Classe::class, inversedBy: 'courses')]
+    private Collection $class_id;
+
     public function __construct()
     {
         $this->grades = new ArrayCollection();
+        $this->class_id = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -106,6 +113,30 @@ class Course
     public function setCourseUnit(?CourseUnit $courseUnit): static
     {
         $this->courseUnit = $courseUnit;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Classe>
+     */
+    public function getClassId(): Collection
+    {
+        return $this->class_id;
+    }
+
+    public function addClassId(Classe $classId): static
+    {
+        if (!$this->class_id->contains($classId)) {
+            $this->class_id->add($classId);
+        }
+
+        return $this;
+    }
+
+    public function removeClassId(Classe $classId): static
+    {
+        $this->class_id->removeElement($classId);
 
         return $this;
     }

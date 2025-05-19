@@ -33,7 +33,7 @@ class Semester
     /**
      * @var Collection<int, CourseUnit>
      */
-    #[ORM\OneToMany(targetEntity: CourseUnit::class, mappedBy: 'semesterNew')]
+    #[ORM\OneToMany(targetEntity: CourseUnit::class, mappedBy: 'semester')]
     private Collection $courseUnits;
 
     /**
@@ -116,7 +116,7 @@ class Semester
     {
         if (!$this->courseUnits->contains($courseUnit)) {
             $this->courseUnits->add($courseUnit);
-            $courseUnit->setSemesterNew($this);
+            $courseUnit->setSemester($this);
         }
 
         return $this;
@@ -125,8 +125,8 @@ class Semester
     public function removeCourseUnit(CourseUnit $courseUnit): static
     {
         if ($this->courseUnits->removeElement($courseUnit)) {
-            if ($courseUnit->getSemesterNew() === $this) {
-                $courseUnit->setSemesterNew(null);
+            if ($courseUnit->getSemester() === $this) {
+                $courseUnit->setSemester(null);
             }
         }
 

@@ -17,7 +17,7 @@ class Classe
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllClasses', 'getAllStudents'])]
+    #[Groups(['getAllClasses', 'getAllStudents', 'getAllLevels'])]
     private ?string $name = null;
 
     /**
@@ -33,10 +33,24 @@ class Classe
     #[ORM\ManyToMany(targetEntity: Semester::class, mappedBy: 'classes')]
     private Collection $semesters;
 
+    #[ORM\ManyToOne(inversedBy: 'classes')]
+    private ?Level $level_id = null;
+
+    /**
+     * @var Collection<int, Course>
+     */
+    #[ORM\ManyToMany(targetEntity: Course::class, mappedBy: 'class_id')]
+    #[Groups(['getAllClasses', 'getAllStudents'])]
+    private Collection $courses;
+
+    #[ORM\ManyToOne(inversedBy: 'classes')]
+    private ?Category $category = null;
+
     public function __construct()
     {
         $this->students = new ArrayCollection();
         $this->semesters = new ArrayCollection();
+        $this->courses = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -109,6 +123,57 @@ class Classe
         if ($this->semesters->removeElement($semester)) {
             $semester->removeClass($this);
         }
+
+        return $this;
+    }
+
+    public function getLevelId(): ?Level
+    {
+        return $this->level_id;
+    }
+
+    public function setLevelId(?Level $level_id): static
+    {
+        $this->level_id = $level_id;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Course>
+     */
+    public function getCourses(): Collection
+    {
+        return $this->courses;
+    }
+
+    public function addCourse(Course $course): static
+    {
+        if (!$this->courses->contains($course)) {
+            $this->courses->add($course);
+            $course->addClassId($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourse(Course $course): static
+    {
+        if ($this->courses->removeElement($course)) {
+            $course->removeClassId($this);
+        }
+
+        return $this;
+    }
+
+    public function getCategory(): ?Category
+    {
+        return $this->category;
+    }
+
+    public function setCategory(?Category $category): static
+    {
+        $this->category = $category;
 
         return $this;
     }
