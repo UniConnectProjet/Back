@@ -128,7 +128,9 @@ class AppFixtures extends Fixture
             $absence->setStartedDate($faker->dateTimeThisYear);
             $absence->setEndedDate($faker->dateTimeThisYear);
             $absence->setJustified($faker->boolean);
-            $absence->setJustification($faker->sentence);
+            if($absence->setJustified($faker->boolean) != false){
+                $absence->setJustification($faker->sentence);
+            }
             $absence->setSemester($semesters[array_rand($semesters)]);
             $manager->persist($absence);
         }

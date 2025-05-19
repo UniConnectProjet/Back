@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Repository\AbsenceRepository;
 use App\Entity\Absence;
+use App\Repository\SemesterRepository;
 use App\Repository\StudentRepository;
 use Symfony\Component\Serializer\SerializerInterface;
 use Doctrine\ORM\EntityManagerInterface;
@@ -144,22 +145,32 @@ class AbsenceController extends AbstractController
      * @return JsonResponse L'absence nouvellement créée.
      */
     
-    #[Route('/api/absences/student/{studentId}', name: 'absence.create', methods: ['POST'])]
+    
+    #[Route('/api/absences/student/{studentId}/semester/{semesterId}', name: 'absence.create', methods: ['POST'])]
     public function createAbsenceForStudent(
         StudentRepository $studentRepository,
+        SemesterRepository $semesterRepository,
         SerializerInterface $serializer,
         Request $request,
         EntityManagerInterface $em,
-        int $studentId
+        int $studentId,
+        int $semesterId
     ): JsonResponse {
         $student = $studentRepository->find($studentId);
         if (!$student) {
             return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
         }
 
+        
+        $semester = $semesterRepository->find($semesterId);
+        if (!$semester) {
+             return new JsonResponse(['error' => 'Semester not found'], Response::HTTP_NOT_FOUND);
+        }
+
         $data = $request->getContent();
         $absence = $serializer->deserialize($data, Absence::class, 'json');
         $absence->setStudent($student);
+        $absence->setSemester($semester);
 
         $em->persist($absence);
         $em->flush();
