@@ -27,7 +27,7 @@ class Absence
     #[Groups(['getAllAbsences', 'getAllStudents', 'getStudentAbsences'])]
     private ?bool $justified = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['getAllAbsences'])]
     private ?string $justification = null;
 
