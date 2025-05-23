@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Auto-generated Migration: Please modify to your needs!
  */
-final class Version20250519135921 extends AbstractMigration
+final class Version20250521120206 extends AbstractMigration
 {
     public function getDescription(): string
     {
@@ -58,6 +58,9 @@ final class Version20250519135921 extends AbstractMigration
         SQL);
         $this->addSql(<<<'SQL'
             CREATE TABLE student (id INT AUTO_INCREMENT NOT NULL, classe_id INT NOT NULL, user_id INT DEFAULT NULL, INDEX IDX_B723AF338F5EA509 (classe_id), UNIQUE INDEX UNIQ_B723AF33A76ED395 (user_id), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`
+        SQL);
+        $this->addSql(<<<'SQL'
+            CREATE TABLE student_course (student_id INT NOT NULL, course_id INT NOT NULL, INDEX IDX_98A8B739CB944F1A (student_id), INDEX IDX_98A8B739591CC992 (course_id), PRIMARY KEY(student_id, course_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`
         SQL);
         $this->addSql(<<<'SQL'
             CREATE TABLE `user` (id INT AUTO_INCREMENT NOT NULL, name VARCHAR(255) NOT NULL, lastname VARCHAR(255) NOT NULL, birthday DATE NOT NULL, email VARCHAR(180) NOT NULL, roles JSON NOT NULL, password VARCHAR(255) NOT NULL, UNIQUE INDEX UNIQ_IDENTIFIER_EMAIL (email), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`
@@ -109,6 +112,12 @@ final class Version20250519135921 extends AbstractMigration
         SQL);
         $this->addSql(<<<'SQL'
             ALTER TABLE student ADD CONSTRAINT FK_B723AF33A76ED395 FOREIGN KEY (user_id) REFERENCES `user` (id)
+        SQL);
+        $this->addSql(<<<'SQL'
+            ALTER TABLE student_course ADD CONSTRAINT FK_98A8B739CB944F1A FOREIGN KEY (student_id) REFERENCES student (id) ON DELETE CASCADE
+        SQL);
+        $this->addSql(<<<'SQL'
+            ALTER TABLE student_course ADD CONSTRAINT FK_98A8B739591CC992 FOREIGN KEY (course_id) REFERENCES course (id) ON DELETE CASCADE
         SQL);
     }
 
@@ -164,6 +173,12 @@ final class Version20250519135921 extends AbstractMigration
             ALTER TABLE student DROP FOREIGN KEY FK_B723AF33A76ED395
         SQL);
         $this->addSql(<<<'SQL'
+            ALTER TABLE student_course DROP FOREIGN KEY FK_98A8B739CB944F1A
+        SQL);
+        $this->addSql(<<<'SQL'
+            ALTER TABLE student_course DROP FOREIGN KEY FK_98A8B739591CC992
+        SQL);
+        $this->addSql(<<<'SQL'
             DROP TABLE absence
         SQL);
         $this->addSql(<<<'SQL'
@@ -201,6 +216,9 @@ final class Version20250519135921 extends AbstractMigration
         SQL);
         $this->addSql(<<<'SQL'
             DROP TABLE student
+        SQL);
+        $this->addSql(<<<'SQL'
+            DROP TABLE student_course
         SQL);
         $this->addSql(<<<'SQL'
             DROP TABLE `user`

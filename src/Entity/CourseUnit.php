@@ -17,11 +17,11 @@ class CourseUnit
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllCourseUnits', 'getAllStudents'])]
+    #[Groups(['getAllCourseUnits', 'getAllStudents', 'getCourseUnits'])]
     private ?string $name = null;
 
     #[ORM\Column]
-    #[Groups(['getAllCourseUnits', 'getAllStudents'])]
+    #[Groups(['getAllCourseUnits', 'getAllStudents', 'getCourseUnits'])]
     private ?float $average = null;
 
     /**
@@ -35,6 +35,9 @@ class CourseUnit
 
     #[ORM\Column(nullable: true)]
     private ?float $averageScore = null;
+
+    #[ORM\ManyToOne(inversedBy: 'courseUnits')]
+    private ?Category $category = null;
 
     public function __construct()
     {
@@ -120,6 +123,18 @@ class CourseUnit
     public function setAverageScore(?float $averageScore): static
     {
         $this->averageScore = $averageScore;
+
+        return $this;
+    }
+
+    public function getCategory(): ?Category
+    {
+        return $this->category;
+    }
+
+    public function setCategory(?Category $category): static
+    {
+        $this->category = $category;
 
         return $this;
     }

@@ -24,9 +24,16 @@ class Category
     #[ORM\OneToMany(targetEntity: Classe::class, mappedBy: 'category')]
     private Collection $classes;
 
+    /**
+     * @var Collection<int, CourseUnit>
+     */
+    #[ORM\OneToMany(targetEntity: CourseUnit::class, mappedBy: 'category')]
+    private Collection $courseUnits;
+
     public function __construct()
     {
         $this->classes = new ArrayCollection();
+        $this->courseUnits = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -70,6 +77,36 @@ class Category
             // set the owning side to null (unless already changed)
             if ($class->getCategory() === $this) {
                 $class->setCategory(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CourseUnit>
+     */
+    public function getCourseUnits(): Collection
+    {
+        return $this->courseUnits;
+    }
+
+    public function addCourseUnit(CourseUnit $courseUnit): static
+    {
+        if (!$this->courseUnits->contains($courseUnit)) {
+            $this->courseUnits->add($courseUnit);
+            $courseUnit->setCategory($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourseUnit(CourseUnit $courseUnit): static
+    {
+        if ($this->courseUnits->removeElement($courseUnit)) {
+            // set the owning side to null (unless already changed)
+            if ($courseUnit->getCategory() === $this) {
+                $courseUnit->setCategory(null);
             }
         }
 
