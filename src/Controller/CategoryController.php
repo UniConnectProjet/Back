@@ -36,4 +36,16 @@ final class CategoryController extends AbstractController
         return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
+    #[Route('/api/categories/{id}/levels', name: 'category.levels', methods: ['GET'])]
+    public function getLevelsByCategory(
+        Category $category,
+        SerializerInterface $serializer
+    ): JsonResponse {
+        $levels = $category->getLevelId();
+
+        $json = $serializer->serialize($levels, 'json', ['groups' => 'getLevelsByCategory']);
+
+        return new JsonResponse($json, Response::HTTP_OK, [], true);
+    }
+
 }

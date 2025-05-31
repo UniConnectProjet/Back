@@ -17,7 +17,7 @@ class Level
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllLevels'])]
+    #[Groups(['getAllLevels','getLevelsByCategory'])]
     private ?string $name = null;
 
     /**
@@ -26,9 +26,23 @@ class Level
     #[ORM\OneToMany(targetEntity: Classe::class, mappedBy: 'level_id')]
     private Collection $classes;
 
+    /**
+     * @var Collection<int, Category>
+     */
+    #[ORM\ManyToMany(targetEntity: Category::class, mappedBy: 'levelId')]
+    private Collection $categories;
+
+    /**
+     * @var Collection<int, CourseUnit>
+     */
+    #[ORM\OneToMany(targetEntity: CourseUnit::class, mappedBy: 'levels')]
+    private Collection $courseUnits;
+
     public function __construct()
     {
         $this->classes = new ArrayCollection();
+        $this->categories = new ArrayCollection();
+        $this->courseUnits = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -72,6 +86,63 @@ class Level
             // set the owning side to null (unless already changed)
             if ($class->getLevelId() === $this) {
                 $class->setLevelId(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Category>
+     */
+    public function getCategories(): Collection
+    {
+        return $this->categories;
+    }
+
+    public function addCategory(Category $category): static
+    {
+        if (!$this->categories->contains($category)) {
+            $this->categories->add($category);
+            $category->addLevelId($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCategory(Category $category): static
+    {
+        if ($this->categories->removeElement($category)) {
+            $category->removeLevelId($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CourseUnit>
+     */
+    public function getCourseUnits(): Collection
+    {
+        return $this->courseUnits;
+    }
+
+    public function addCourseUnit(CourseUnit $courseUnit): static
+    {
+        if (!$this->courseUnits->contains($courseUnit)) {
+            $this->courseUnits->add($courseUnit);
+            $courseUnit->setLevels($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourseUnit(CourseUnit $courseUnit): static
+    {
+        if ($this->courseUnits->removeElement($courseUnit)) {
+            // set the owning side to null (unless already changed)
+            if ($courseUnit->getLevels() === $this) {
+                $courseUnit->setLevels(null);
             }
         }
 

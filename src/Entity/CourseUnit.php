@@ -39,6 +39,9 @@ class CourseUnit
     #[ORM\ManyToOne(inversedBy: 'courseUnits')]
     private ?Category $category = null;
 
+    #[ORM\ManyToOne(inversedBy: 'courseUnits')]
+    private ?Level $levels = null;
+
     public function __construct()
     {
         $this->courses = new ArrayCollection();
@@ -135,6 +138,18 @@ class CourseUnit
     public function setCategory(?Category $category): static
     {
         $this->category = $category;
+
+        return $this;
+    }
+
+    public function getLevels(): ?Level
+    {
+        return $this->levels;
+    }
+
+    public function setLevels(?Level $levels): static
+    {
+        $this->levels = $levels;
 
         return $this;
     }

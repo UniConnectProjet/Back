@@ -58,9 +58,30 @@ class AppFixtures extends Fixture
         foreach ($categoryNames as $catName) {
             $category = new Category();
             $category->setName($catName);
+            foreach ($levels as $level) {
+                $category->addLevelId($level);
+            }
             $manager->persist($category);
             $categories[] = $category;
         }
+
+        // Certaines filières aient moins de niveaux
+        /*foreach ($categoryNames as $catName) {
+            $category = new Category();
+            $category->setName($catName);
+
+            if ($catName === 'Biologie') {
+                $category->addLevelId($levels[0]); // Bac+1
+                $category->addLevelId($levels[1]); // Bac+2
+            } else {
+                foreach ($levels as $level) {
+                    $category->addLevelId($level);
+                }
+            }
+
+            $manager->persist($category);
+        }*/
+
 
         // Classes
         $classes = [];
@@ -155,17 +176,30 @@ class AppFixtures extends Fixture
             ],
         ];
 
-
         $courseUnits = [];
         $courses = [];
 
+        // Créer une map pour retrouver la catégorie par son nom
+        $categoryByName = [];
+        foreach ($categories as $category) {
+            $categoryByName[$category->getName()] = $category;
+        }
+
         foreach ($courseParCategorie as $categorieNom => $ues) {
+            $category = $categoryByName[$categorieNom] ?? null;
+            if (!$category) continue;
+
             foreach ($ues as $ueName => $moduleNames) {
                 $courseUnit = new CourseUnit();
                 $courseUnit->setName($ueName);
                 $courseUnit->setSemester($semesters[array_rand($semesters)]);
                 $courseUnit->setAverage(mt_rand(10, 20));
                 $courseUnit->setAverageScore(mt_rand(10, 20));
+                $courseUnit->setCategory($category);
+                $randomLevel = $levels[array_rand($levels)];
+                $courseUnit->setCategory($category);
+                $courseUnit->setLevels($randomLevel);
+
                 $manager->persist($courseUnit);
                 $courseUnits[] = $courseUnit;
 
@@ -186,8 +220,6 @@ class AppFixtures extends Fixture
                 }
             }
         }
-
-
 
         // Grades
         foreach ($students as $student) {

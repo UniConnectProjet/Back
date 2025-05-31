@@ -30,10 +30,17 @@ class Category
     #[ORM\OneToMany(targetEntity: CourseUnit::class, mappedBy: 'category')]
     private Collection $courseUnits;
 
+    /**
+     * @var Collection<int, Level>
+     */
+    #[ORM\ManyToMany(targetEntity: Level::class, inversedBy: 'categories')]
+    private Collection $levelId;
+
     public function __construct()
     {
         $this->classes = new ArrayCollection();
         $this->courseUnits = new ArrayCollection();
+        $this->levelId = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -109,6 +116,30 @@ class Category
                 $courseUnit->setCategory(null);
             }
         }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Level>
+     */
+    public function getLevelId(): Collection
+    {
+        return $this->levelId;
+    }
+
+    public function addLevelId(Level $levelId): static
+    {
+        if (!$this->levelId->contains($levelId)) {
+            $this->levelId->add($levelId);
+        }
+
+        return $this;
+    }
+
+    public function removeLevelId(Level $levelId): static
+    {
+        $this->levelId->removeElement($levelId);
 
         return $this;
     }
