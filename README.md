@@ -40,6 +40,11 @@ Après avoir installé tous les prérequis :
 
 2. **Configuration de la base de données en local**
 
+    ### Supprimer la bdd
+    ```bash
+        php bin/console doctrine:database:drop --force
+    ```
+
     #### Etape 1 : Démarrer Apache et MySQL sur Xampp (version Desktop)
 
     #### Etape 2 : Création de la base de données
@@ -60,7 +65,12 @@ Après avoir installé tous les prérequis :
 
     #### Etape 5 : Exécuter les fixtures 
     ```bash
-        php bin/console doctrine:fixtures:load 
+        php bin/console doctrine:fixtures:load --mode=light
+    ```
+
+    #### Etape 6 : Démarrer en local 
+    ```bash
+        php -S 127.0.0.1:8000 -t public
     ```
 
 

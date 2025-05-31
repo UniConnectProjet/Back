@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Auto-generated Migration: Please modify to your needs!
  */
-final class Version20250521120206 extends AbstractMigration
+final class Version20250531111652 extends AbstractMigration
 {
     public function getDescription(): string
     {
@@ -36,7 +36,7 @@ final class Version20250521120206 extends AbstractMigration
             CREATE TABLE course_classe (course_id INT NOT NULL, classe_id INT NOT NULL, INDEX IDX_21BF7EDB591CC992 (course_id), INDEX IDX_21BF7EDB8F5EA509 (classe_id), PRIMARY KEY(course_id, classe_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`
         SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE course_unit (id INT AUTO_INCREMENT NOT NULL, name VARCHAR(255) NOT NULL, average DOUBLE PRECISION NOT NULL, average_score DOUBLE PRECISION DEFAULT NULL, semester_id INT DEFAULT NULL, INDEX IDX_1419D1554A798B6F (semester_id), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`
+            CREATE TABLE course_unit (id INT AUTO_INCREMENT NOT NULL, name VARCHAR(255) NOT NULL, average DOUBLE PRECISION NOT NULL, average_score DOUBLE PRECISION DEFAULT NULL, semester_id INT DEFAULT NULL, category_id INT DEFAULT NULL, INDEX IDX_1419D1554A798B6F (semester_id), INDEX IDX_1419D15512469DE2 (category_id), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`
         SQL);
         $this->addSql(<<<'SQL'
             CREATE TABLE grade (id INT AUTO_INCREMENT NOT NULL, grade DOUBLE PRECISION NOT NULL, dividor DOUBLE PRECISION NOT NULL, title VARCHAR(255) NOT NULL, student_id INT DEFAULT NULL, course_id INT DEFAULT NULL, INDEX IDX_595AAE34CB944F1A (student_id), INDEX IDX_595AAE34591CC992 (course_id), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`
@@ -88,6 +88,9 @@ final class Version20250521120206 extends AbstractMigration
         SQL);
         $this->addSql(<<<'SQL'
             ALTER TABLE course_unit ADD CONSTRAINT FK_1419D1554A798B6F FOREIGN KEY (semester_id) REFERENCES semester (id)
+        SQL);
+        $this->addSql(<<<'SQL'
+            ALTER TABLE course_unit ADD CONSTRAINT FK_1419D15512469DE2 FOREIGN KEY (category_id) REFERENCES category (id)
         SQL);
         $this->addSql(<<<'SQL'
             ALTER TABLE grade ADD CONSTRAINT FK_595AAE34CB944F1A FOREIGN KEY (student_id) REFERENCES student (id)
@@ -147,6 +150,9 @@ final class Version20250521120206 extends AbstractMigration
         SQL);
         $this->addSql(<<<'SQL'
             ALTER TABLE course_unit DROP FOREIGN KEY FK_1419D1554A798B6F
+        SQL);
+        $this->addSql(<<<'SQL'
+            ALTER TABLE course_unit DROP FOREIGN KEY FK_1419D15512469DE2
         SQL);
         $this->addSql(<<<'SQL'
             ALTER TABLE grade DROP FOREIGN KEY FK_595AAE34CB944F1A
