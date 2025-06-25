@@ -17,7 +17,7 @@ class Course
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllCourses', 'getAllStudents', 'getStudentGrades'])]
+    #[Groups(['getAllCourses', 'getAllStudents', 'getStudentGrades', 'getCourseUnits'])]
     private ?string $name = null;
 
     #[ORM\Column]
@@ -40,10 +40,17 @@ class Course
     #[ORM\ManyToMany(targetEntity: Classe::class, inversedBy: 'courses')]
     private Collection $class_id;
 
+    /**
+     * @var Collection<int, Student>
+     */
+    #[ORM\ManyToMany(targetEntity: Student::class, mappedBy: 'courses')]
+    private Collection $students;
+
     public function __construct()
     {
         $this->grades = new ArrayCollection();
         $this->class_id = new ArrayCollection();
+        $this->students = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -137,6 +144,33 @@ class Course
     public function removeClassId(Classe $classId): static
     {
         $this->class_id->removeElement($classId);
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Student>
+     */
+    public function getStudents(): Collection
+    {
+        return $this->students;
+    }
+
+    public function addStudent(Student $student): static
+    {
+        if (!$this->students->contains($student)) {
+            $this->students->add($student);
+            $student->addCourse($this);
+        }
+
+        return $this;
+    }
+
+    public function removeStudent(Student $student): static
+    {
+        if ($this->students->removeElement($student)) {
+            $student->removeCourse($this);
+        }
 
         return $this;
     }

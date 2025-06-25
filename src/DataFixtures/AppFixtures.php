@@ -58,9 +58,30 @@ class AppFixtures extends Fixture
         foreach ($categoryNames as $catName) {
             $category = new Category();
             $category->setName($catName);
+            foreach ($levels as $level) {
+                $category->addLevelId($level);
+            }
             $manager->persist($category);
             $categories[] = $category;
         }
+
+        // Certaines filières aient moins de niveaux
+        /*foreach ($categoryNames as $catName) {
+            $category = new Category();
+            $category->setName($catName);
+
+            if ($catName === 'Biologie') {
+                $category->addLevelId($levels[0]); // Bac+1
+                $category->addLevelId($levels[1]); // Bac+2
+            } else {
+                foreach ($levels as $level) {
+                    $category->addLevelId($level);
+                }
+            }
+
+            $manager->persist($category);
+        }*/
+
 
         // Classes
         $classes = [];
@@ -118,39 +139,85 @@ class AppFixtures extends Fixture
 
         // Courses par catégorie
         $courseParCategorie = [
-            'Informatique' => ['Programmation Web', 'Algorithmes', 'Systèmes', 'Base de données'],
-            'Chimie' => ['Chimie Organique', 'Chimie Analytique', 'Thermochimie'],
-            'Génie Civil' => ['Mécanique des structures', 'Béton Armé', 'Topographie'],
-            'Biologie' => ['Génétique', 'Microbiologie', 'Biologie Cellulaire'],
-            'Mathématiques' => ['Analyse', 'Algèbre', 'Probabilités'],
-            'Electronique' => ['Circuits numériques', 'Electronique de puissance', 'Microcontrôleurs'],
-            'Physique' => ['Optique', 'Mécanique', 'Thermodynamique'],
-            'Gestion' => ['Comptabilité', 'Marketing', 'Finance d’entreprise']
+            'Informatique' => [
+                'UE Programmation' => ['Programmation Web', 'POO', 'Git', 'DevOps', 'Tests'],
+                'UE Algorithmique' => ['Algorithmes', 'Structures de données', 'Complexité', 'Graphes', 'Optimisation'],
+                'UE Systèmes' => ['Systèmes Unix', 'Réseaux', 'Sécurité', 'Virtualisation', 'Docker'],
+                'UE Base de données' => ['SQL', 'Modélisation', 'NoSQL', 'Transactions', 'Requêtes avancées'],
+                'UE Web' => ['HTML/CSS', 'JavaScript', 'Symfony', 'API REST', 'React'],
+            ],
+            'Chimie' => [
+                'UE Générale' => ['Chimie Générale', 'Thermochimie', 'Oxydoréduction', 'pH', 'Solubilité'],
+                'UE Organique' => ['Chimie Orga 1', 'Chimie Orga 2', 'Synthèse', 'Isomérie', 'Spectroscopie'],
+                'UE Analytique' => ['Chromatographie', 'Spectroscopie UV', 'Analyse qualitative', 'Titrage', 'Electrochimie'],
+                'UE Minérale' => ['Composés ioniques', 'Complexes', 'Métaux', 'Précipités', 'Analyse minérale'],
+                'UE Expérimentale' => ['TP Orga', 'TP Minérale', 'Sécurité labo', 'Protocoles', 'Bilan matières'],
+            ],
+            'Génie Civil' => [
+                'UE Structures' => ['Statique', 'RDM', 'Structures béton', 'Structures acier', 'Calculs éléments finis'],
+                'UE Matériaux' => ['Béton armé', 'Acier', 'Verre', 'Bois', 'Normes'],
+                'UE Topographie' => ['Nivellement', 'Mesures', 'GPS', 'Relevé terrain', 'Cartographie'],
+                'UE Construction' => ['Planification', 'Chantier', 'Coût', 'Sécurité', 'Logistique'],
+                'UE DAO' => ['AutoCAD', 'Revit', 'SketchUp', 'Plan 2D', 'Maquette 3D'],
+            ],
+            'Biologie' => [
+                'UE Cellule' => ['Biologie Cellulaire', 'ADN/ARN', 'Cycle cellulaire', 'Division', 'Culture cellulaire'],
+                'UE Génétique' => ['Hérédité', 'Mutation', 'Caryotype', 'Cartes génétiques', 'Technologie ADN'],
+                'UE Microbio' => ['Bactérie', 'Virus', 'Stérilisation', 'Antibio', 'Croissance microbienne'],
+                'UE Biochimie' => ['Protéines', 'Enzymes', 'Lipides', 'Glucides', 'Voies métaboliques'],
+                'UE Environnement' => ['Écosystèmes', 'Écologie', 'Cycle du carbone', 'Biodiversité', 'Pollution'],
+            ],
+            'Mathématiques' => [
+                'UE Analyse' => ['Dérivées', 'Intégrales', 'Limites', 'Suites', 'Séries'],
+                'UE Algèbre' => ['Matrices', 'Espaces vectoriels', 'Applications linéaires', 'Déterminants', 'Réduction'],
+                'UE Proba/Stats' => ['Variable aléatoire', 'Lois usuelles', 'Espérance', 'Échantillonnage', 'Tests'],
+                'UE Géométrie' => ['Vecteurs', 'Plans', 'Angles', 'Distances', 'Transformations'],
+                'UE Informatique' => ['Python', 'Maths appliquées', 'Numérique', 'Calcul formel', 'Logique'],
+            ],
         ];
 
         $courseUnits = [];
         $courses = [];
-        foreach ($courseParCategorie as $categorieNom => $modules) {
-            foreach ($modules as $moduleName) {
+
+        // Créer une map pour retrouver la catégorie par son nom
+        $categoryByName = [];
+        foreach ($categories as $category) {
+            $categoryByName[$category->getName()] = $category;
+        }
+
+        foreach ($courseParCategorie as $categorieNom => $ues) {
+            $category = $categoryByName[$categorieNom] ?? null;
+            if (!$category) continue;
+
+            foreach ($ues as $ueName => $moduleNames) {
                 $courseUnit = new CourseUnit();
-                $courseUnit->setName($moduleName);
+                $courseUnit->setName($ueName);
                 $courseUnit->setSemester($semesters[array_rand($semesters)]);
                 $courseUnit->setAverage(mt_rand(10, 20));
                 $courseUnit->setAverageScore(mt_rand(10, 20));
-                $manager->persist($courseUnit);
+                $courseUnit->setCategory($category);
+                $randomLevel = $levels[array_rand($levels)];
+                $courseUnit->setCategory($category);
+                $courseUnit->setLevels($randomLevel);
 
-                $course = new Course();
-                $course->setName($moduleName);
-                $course->setAverage(mt_rand(10, 20));
-                $course->setCourseUnit($courseUnit);
-                if (isset($classesByCategory[$categorieNom])) {
-                    foreach ($classesByCategory[$categorieNom] as $classe) {
-                        $course->addClassId($classe);
-                    }
-                }
-                $manager->persist($course);
+                $manager->persist($courseUnit);
                 $courseUnits[] = $courseUnit;
-                $courses[] = $course;
+
+                foreach ($moduleNames as $moduleName) {
+                    $course = new Course();
+                    $course->setName($moduleName);
+                    $course->setAverage(mt_rand(10, 20));
+                    $course->setCourseUnit($courseUnit);
+
+                    if (isset($classesByCategory[$categorieNom])) {
+                        foreach ($classesByCategory[$categorieNom] as $classe) {
+                            $course->addClassId($classe);
+                        }
+                    }
+
+                    $manager->persist($course);
+                    $courses[] = $course;
+                }
             }
         }
 

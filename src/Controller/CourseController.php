@@ -72,7 +72,7 @@ class CourseController extends AbstractController
         SerializerInterface $serializer,
         int $studentId
     ): JsonResponse {
-        $courses = $repository->findBy(['student' => $studentId]);
+        $courses = $repository->findByStudentId($studentId);
         $jsonCourses = $serializer->serialize($courses, 'json', ["groups" => "getAllCourses"]);
 
         return new JsonResponse(
