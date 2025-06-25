@@ -65,7 +65,7 @@ Après avoir installé tous les prérequis :
 
     #### Etape 5 : Exécuter les fixtures 
     ```bash
-        php bin/console doctrine:fixtures:load --mode=light
+        php bin/console app:fixtures:load --mode=light
     ```
 
     #### Etape 6 : Démarrer en local 
@@ -146,4 +146,11 @@ Après avoir installé tous les prérequis :
 
     ```arduino
         http://localhost:8000
+    ```
+
+### Démarrer le VPS
+
+1. **Se connecter au vps**
+    ```bash
+        ssh debian@54.36.191.40
     ```
