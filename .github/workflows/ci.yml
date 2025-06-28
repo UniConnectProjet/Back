@@ -80,9 +80,22 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /var/www
+
+            # Exporter la passphrase pour l'environnement Symfony (optionnel mais utile)
+            export JWT_PASSPHRASE="${{ secrets.JWT_PASSPHRASE }}"
+
+            # Installer les dépendances (nécessaire avant d'exécuter bin/console)
             docker compose exec -T backend composer install --no-interaction --prefer-dist
-            docker compose exec -T backend mkdir -p config/jwt
-            echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d | docker compose exec -T backend sh -c 'cat > config/jwt/private.pem'
-            echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d | docker compose exec -T backend sh -c 'cat > config/jwt/public.pem'
+
+            # Créer le dossier JWT
+            docker compose exec -T --user root backend mkdir -p config/jwt
+
+            # Injecter les clés décodées depuis les secrets GitHub
+            echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d | docker compose exec -T --user root backend sh -c 'cat > config/jwt/private.pem'
+            echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d | docker compose exec -T --user root backend sh -c 'cat > config/jwt/public.pem'
+
+            # Fixer les permissions
             docker compose exec -T backend chmod 600 config/jwt/*.pem
+
+            # Mettre à jour le schéma de la base de données
             docker compose exec -T backend php bin/console doctrine:schema:update --force --no-interaction
