@@ -80,8 +80,9 @@ jobs:
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
             cd /var/www
+            docker compose exec -T backend composer install --no-interaction --prefer-dist
             docker compose exec -T backend mkdir -p config/jwt
-            echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d | docker compose exec -T backend tee config/jwt/private.pem > /dev/null
-            echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d | docker compose exec -T backend tee config/jwt/public.pem > /dev/null
+            echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d | docker compose exec -T backend sh -c 'cat > config/jwt/private.pem'
+            echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d | docker compose exec -T backend sh -c 'cat > config/jwt/public.pem'
             docker compose exec -T backend chmod 600 config/jwt/*.pem
             docker compose exec -T backend php bin/console doctrine:schema:update --force --no-interaction
