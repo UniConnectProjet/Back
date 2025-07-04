@@ -30,8 +30,5 @@ RUN chmod -R 775 var && chmod -R 777 var/cache var/log
 # Définir l'utilisateur par défaut
 USER symfony
 
-# Exposer le port 8000 (Symfony server)
-EXPOSE 8000
-
 # Lancer le serveur PHP natif en exposant le dossier public
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+CMD ["php-fpm"]
