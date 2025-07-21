@@ -31,8 +31,8 @@
     "require-dev": {
         "doctrine/doctrine-fixtures-bundle": "^4.1",
         "fakerphp/faker": "^1.24",
-        "symfony/maker-bundle": "^1.61",
-        "phpunit/phpunit": "^9.5"
+        "phpunit/phpunit": "^9.6",
+        "symfony/maker-bundle": "^1.61"
     },
     "config": {
         "allow-plugins": {
