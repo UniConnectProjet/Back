@@ -51,18 +51,16 @@ class StudentController extends AbstractController
     }
 
     #[Route('/api/students/{id}', name: 'student.getOne', methods:['GET'])]
-    public function getOneStudent(
-        int $id
-        ): JsonResponse
+    public function getOneStudent(int $id): JsonResponse
     {
         $student =  $this->repository->find($id);
-        $jsonStudent = $this->serializer->serialize($student, 'json',["groups" => "getAllStudents"]);
-        return new JsonResponse(    
-            $jsonStudent,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+
+        if (!$student) {
+            return new JsonResponse(['error' => 'Student not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $jsonStudent = $this->serializer->serialize($student, 'json', ["groups" => "getAllStudents"]);
+        return new JsonResponse($jsonStudent, JsonResponse::HTTP_OK, [], true);
     }
 
     #[Route('/api/student/grades/{id}', name: 'student.getGrades', methods:['GET'])]

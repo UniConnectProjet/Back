@@ -2,7 +2,7 @@
 
 namespace App\Tests\Controller;
 
-use App\Tests\DataFixtures\TestUserFixtures;
+use App\Tests\DataFixtures\TestFixtures;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\Common\DataFixtures\Purger\ORMPurger;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -27,7 +27,7 @@ class UserControllerTest extends WebTestCase
 
         // Rechargement des fixtures
         $hasher = $container->get(UserPasswordHasherInterface::class);
-        $fixture = new TestUserFixtures($hasher);
+        $fixture = new TestFixtures($hasher);
         $fixture->load($em);
     }
 
