@@ -2,16 +2,20 @@
 
 namespace App\Controller;
 
+use App\Entity\Student;
+use App\Entity\Course;
+
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Serializer\SerializerInterface;
-use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Annotation\Route;
 use App\Repository\GradeRepository;
 use App\Entity\Grade;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Doctrine\ORM\EntityManagerInterface;
 
+#[Route('/api/grades')]
 class GradeController extends AbstractController
 {
     #[Route('/grade', name: 'app_grade')]
@@ -23,7 +27,7 @@ class GradeController extends AbstractController
         ]);
     }
 
-    #[Route('/api/grades', name: 'grade.getAll', methods:['GET'])]
+    #[Route('/', name: 'grade.getAll', methods:['GET'])]
     public function getAllGrades(
         GradeRepository $repository,
         SerializerInterface $serializer
@@ -39,7 +43,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/student/{studentId}', name: 'grade.getOne', methods:['GET'])]
+    #[Route('/student/{studentId}', name: 'grade.getByStudent', methods:['GET'])]
     public function getGradesByStudentId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -56,7 +60,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/course/{courseId}', name: 'grade.getOne', methods:['GET'])]
+    #[Route('/course/{courseId}', name: 'grade.getByCourse', methods:['GET'])]
     public function getGradesByCourseId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -73,7 +77,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/semester/{semesterId}', name: 'grade.getOne', methods:['GET'])]
+    #[Route('/semester/{semesterId}', name: 'grade.getBySemester', methods:['GET'])]
     public function getGradesBySemesterId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -90,7 +94,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grade/student/{studentId}', name: 'grade.addForStudent', methods:['POST'])]
+    #[Route('/student/{studentId}', name: 'grade.addForStudent', methods:['POST'])]
     public function addGradeForStudent(
         Request $request,
         SerializerInterface $serializer,
@@ -100,7 +104,13 @@ class GradeController extends AbstractController
     {
         $data = $request->getContent();
         $grade = $serializer->deserialize($data, Grade::class, 'json');
-        $grade->setStudent($studentId);
+        $student = $em->getRepository(Student::class)->find($studentId);
+        
+        if (!$student) {
+            return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+        }
+        $grade->setStudent($student);
+
         $em->persist($grade);
         $em->flush();
         return new JsonResponse(
@@ -111,7 +121,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/course/{studentId}', name: 'grade.addForCourse', methods:['POST'])]
+    #[Route('/course/{courseId}', name: 'grade.addForCourse', methods:['POST'])]
     public function addGradeForCourse(
         Request $request,
         SerializerInterface $serializer,
@@ -121,7 +131,13 @@ class GradeController extends AbstractController
     {
         $data = $request->getContent();
         $grade = $serializer->deserialize($data, Grade::class, 'json');
-        $grade->setCourse($courseId);
+        $course = $em->getRepository(Course::class)->find($courseId);
+        
+        if (!$course) {
+            return new JsonResponse(['error' => 'Course not found'], Response::HTTP_NOT_FOUND);
+        }
+        $grade->setCourse($course);
+
         $em->persist($grade);
         $em->flush();
         return new JsonResponse(
@@ -132,7 +148,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/{studentId}', name: 'grade.update', methods:['PUT'])]
+    #[Route('/{studentId}', name: 'grade.update', methods:['PUT'])]
     public function updateGrade(
         Request $request,
         SerializerInterface $serializer,
@@ -142,7 +158,13 @@ class GradeController extends AbstractController
     {
         $data = $request->getContent();
         $grade = $serializer->deserialize($data, Grade::class, 'json');
-        $grade->setStudent($studentId);
+        
+        $student = $em->getRepository(Student::class)->find($studentId);
+        if (!$student) {
+            return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+        }
+        $grade->setStudent($student);
+
         $em->persist($grade);
         $em->flush();
         return new JsonResponse(
@@ -153,14 +175,19 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/api/grades/{studentId}', name: 'grade.delete', methods:['DELETE'])]
+    #[Route('/{gradeId}', name: 'grade.delete', methods:['DELETE'])]
     public function deleteGrade(
         GradeRepository $repository,
         EntityManagerInterface $em,
-        int $studentId
+        int $gradeId
         ): JsonResponse
     {
-        $grade = $repository->find($studentId);
+        $grade = $repository->find($gradeId);
+
+        if (!$grade) {
+            return new JsonResponse(['error' => 'Grade not found'], Response::HTTP_NOT_FOUND);
+        }
+
         $em->remove($grade);
         $em->flush();
         return new JsonResponse(
