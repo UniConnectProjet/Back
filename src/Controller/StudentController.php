@@ -18,7 +18,7 @@ use Symfony\Component\HttpFoundation\Request;
 
 class StudentController extends AbstractController
 {
-
+    private const ROUTE_FOR_A_STUDENT = '/api/students/{id}';
     private StudentRepository $repository;
     private SerializerInterface $serializer;
 
@@ -50,7 +50,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.getOne', methods:['GET'])]
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.getOne', methods:['GET'])]
     public function getOneStudent(
         int $id
         ): JsonResponse
@@ -151,7 +151,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.update', methods:['PUT'])]
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.update', methods:['PUT'])]
     public function updateStudent(
         Request $request,
         EntityManagerInterface $em,
@@ -213,7 +213,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.delete', methods:['DELETE'])]
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.delete', methods:['DELETE'])]
     public function deleteStudent(
         EntityManagerInterface $em,
         int $id
