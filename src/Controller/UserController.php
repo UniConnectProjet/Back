@@ -13,6 +13,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
+#[Route('/api/users')]
 class UserController extends AbstractController
 {
     private UserRepository $repository;
@@ -38,7 +39,7 @@ class UserController extends AbstractController
         ]);
     }
 
-    #[Route('/api/users', name: 'users.getAll', methods:['GET'])]
+    #[Route('/', name: 'users.getAll', methods:['GET'])]
     public function getAllUsers(): JsonResponse
     {
         $user =  $this->repository->findAll();
@@ -51,7 +52,7 @@ class UserController extends AbstractController
         );
     }
 
-    #[Route('/api/user/{email}', name: 'user.get', methods: ['GET'])]
+    #[Route('/{email}', name: 'user.get', methods: ['GET'])]
     public function getUserId(string $email): JsonResponse
     {
         $currentUser = $this->getUser(); // AbstractController fournit cette méthode
@@ -68,7 +69,7 @@ class UserController extends AbstractController
         return $this->json(['id' => $user->getId()]);
     }
 
-    #[Route('/api/user', name: 'user.create', methods:['POST'])]
+    #[Route('/', name: 'user.create', methods:['POST'])]
     public function createUser(
         Request $request,
         EntityManagerInterface $entityManager
@@ -105,7 +106,7 @@ class UserController extends AbstractController
         );
     }
 
-    #[Route('/api/user/{id}', name: 'user.update', methods:['PUT'])]
+    #[Route('/{id}', name: 'user.update', methods:['PUT'])]
     public function updateUser(
         int $id,
         Request $request
@@ -138,7 +139,7 @@ class UserController extends AbstractController
         );
     }
 
-    #[Route('/api/users/{id}', name: 'users.delete', methods:['DELETE'])]
+    #[Route('/{id}', name: 'users.delete', methods:['DELETE'])]
     public function deleteUser(
         int $id
         ): JsonResponse

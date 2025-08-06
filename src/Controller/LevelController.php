@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 
+#[Route('/api/levels')]
 final class LevelController extends AbstractController
 {
     private LevelRepository $repository;
@@ -28,7 +29,7 @@ final class LevelController extends AbstractController
         ]);
     }
 
-    #[Route('/api/levels', name: 'level.getAll', methods: ['GET'])]
+    #[Route('/', name: 'level.getAll', methods: ['GET'])]
     public function getAllLevels(): JsonResponse
     {
         $levels = $this->repository->findAll();
@@ -37,7 +38,7 @@ final class LevelController extends AbstractController
         return new JsonResponse($jsonLevel, JsonResponse::HTTP_OK, [], true);
     }
 
-    #[Route('/api/level/{id}', name: 'level.getOne', methods: ['GET'])]
+    #[Route('/{id}', name: 'level.getOne', methods: ['GET'])]
     public function getLevel(int $id): JsonResponse
     {
         $level = $this->repository->find($id);
@@ -49,7 +50,7 @@ final class LevelController extends AbstractController
         return new JsonResponse($jsonLevel, JsonResponse::HTTP_OK, [], true);
     }
 
-    #[Route('/api/level/{id}/classes', name: 'level.getClasses', methods: ['GET'])]
+    #[Route('/{id}/classes', name: 'level.getClasses', methods: ['GET'])]
     public function getClassesFromLevel(int $id): JsonResponse
     {
         $level = $this->repository->find($id);

@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Serializer\SerializerInterface;
 
-
+#[Route('/api/classes')]
 class ClasseController extends AbstractController
 {
     #[Route('/classe', name: 'app_classe')]
@@ -25,7 +25,7 @@ class ClasseController extends AbstractController
         ]);
     }
     
-    #[Route('/api/classes', name: 'classe.getAll', methods:['GET'])]
+    #[Route('/', name: 'classe.getAll', methods:['GET'])]
     public function getAllClasses(
         ClasseRepository $repository,
         SerializerInterface $serializer
@@ -41,7 +41,7 @@ class ClasseController extends AbstractController
         );
     }
 
-    #[Route('/api/classes/{classeId}', name: 'classe.getAllStudentsByClass', methods:['GET'])]
+    #[Route('/{classeId}', name: 'classe.getAllStudentsByClass', methods:['GET'])]
     public function getAllStudentsByClass(
         ClasseRepository $repository,
         SerializerInterface $serializer,
@@ -58,7 +58,7 @@ class ClasseController extends AbstractController
         );
     }
 
-    #[Route('/api/classes/{classId}/students/{studentId}', name: 'class.addStudent', methods:['POST'])]
+    #[Route('/{classId}/students/{studentId}', name: 'class.addStudent', methods:['POST'])]
     public function addStudentToClass(
         int $classId,
         int $studentId,

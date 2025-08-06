@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 
+#[Route('/api/semesters')]
 final class SemesterController extends AbstractController
 {
     #[Route('/semester', name: 'app_semester')]
@@ -21,7 +22,7 @@ final class SemesterController extends AbstractController
         ]);
     }
 
-    #[Route('/api/semesters', name: 'semester.getAll', methods:['GET'])]
+    #[Route('/', name: 'semester.getAll', methods:['GET'])]
     public function getAllSemesters(
         SemesterRepository $repository,
         SerializerInterface $serializer
@@ -37,7 +38,7 @@ final class SemesterController extends AbstractController
         );
     }
 
-    #[Route('/api/semester/{studentId}', name: 'semester.getOne', methods:['GET'])]
+    #[Route('/{studentId}', name: 'semester.getOne', methods:['GET'])]
     public function getSemesterByStudentId(
         StudentRepository $studentRepo,
         SerializerInterface $serializer,

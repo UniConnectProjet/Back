@@ -16,6 +16,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 
 use Symfony\Component\HttpFoundation\Request;
 
+#[Route('/api/students')]
 class StudentController extends AbstractController
 {
 
@@ -37,7 +38,7 @@ class StudentController extends AbstractController
     }
 
 
-    #[Route('/api/students', name: 'student.getAll', methods:['GET'])]
+    #[Route('/', name: 'student.getAll', methods:['GET'])]
     public function getAllStudents(): JsonResponse
     {
         $student =  $this->repository->findAll();
@@ -50,7 +51,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.getOne', methods:['GET'])]
+    #[Route('/{id}', name: 'student.getOne', methods:['GET'])]
     public function getOneStudent(int $id): JsonResponse
     {
         $student =  $this->repository->find($id);
@@ -63,7 +64,7 @@ class StudentController extends AbstractController
         return new JsonResponse($jsonStudent, JsonResponse::HTTP_OK, [], true);
     }
 
-    #[Route('/api/student/grades/{id}', name: 'student.getGrades', methods:['GET'])]
+    #[Route('/grades/{id}', name: 'student.getGrades', methods:['GET'])]
     public function getGradesByStudentId(
         int $id
         ): JsonResponse
@@ -78,7 +79,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/student/absences/{id}', name: 'student.getAbsences', methods:['GET'])]
+    #[Route('/absences/{id}', name: 'student.getAbsences', methods:['GET'])]
     public function getAbsencesByStudentId(
         int $id
         ): JsonResponse
@@ -93,7 +94,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/student', name: 'student.add', methods:['POST'])]
+    #[Route('/', name: 'student.add', methods:['POST'])]
     public function addStudent(
         Request $request,
         EntityManagerInterface $em,
@@ -149,7 +150,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.update', methods:['PUT'])]
+    #[Route('/{id}', name: 'student.update', methods:['PUT'])]
     public function updateStudent(
         Request $request,
         EntityManagerInterface $em,
@@ -211,7 +212,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.delete', methods:['DELETE'])]
+    #[Route('/{id}', name: 'student.delete', methods:['DELETE'])]
     public function deleteStudent(
         EntityManagerInterface $em,
         int $id
