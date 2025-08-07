@@ -192,7 +192,9 @@ class AppFixtures extends Fixture
 
         foreach ($courseParCategorie as $categorieNom => $ues) {
             $category = $categoryByName[$categorieNom] ?? null;
-            if (!$category) continue;
+            if (!$category) {
+                continue;
+            }
 
             foreach ($ues as $ueName => $moduleNames) {
                 $courseUnit = new CourseUnit();
