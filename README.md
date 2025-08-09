@@ -1,4 +1,5 @@
 # Backend Setup
+[Voir le changelog du projet](CHANGELOG.md)
 
 Ce guide explique comment démarrer le backend de l'application avec Docker.
 
@@ -154,6 +155,3 @@ Après avoir installé tous les prérequis :
     ```bash
         ssh ubuntu@54.36.191.40
     ```
-# Backend Setup
-
-📜 [Voir le changelog du projet](CHANGELOG.md)
