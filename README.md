@@ -152,5 +152,5 @@ Après avoir installé tous les prérequis :
 
 1. **Se connecter au vps**
     ```bash
-        ssh debian@54.36.191.40
+        ssh ubuntu@54.36.191.40
     ```
