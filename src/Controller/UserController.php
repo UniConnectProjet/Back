@@ -55,7 +55,7 @@ class UserController extends AbstractController
     #[Route('/{email}', name: 'user.get', methods: ['GET'])]
     public function getUserId(string $email): JsonResponse
     {
-        $currentUser = $this->getUser(); // AbstractController fournit cette méthode
+        $currentUser = $this->getUser();
 
         if (!$currentUser || $currentUser->getUserIdentifier() !== $email) {
             return new JsonResponse(['error' => 'Unauthorized'], JsonResponse::HTTP_UNAUTHORIZED);
@@ -87,16 +87,14 @@ class UserController extends AbstractController
         $user->setLastname($data['lastname']);
         $user->setEmail($data['email']);
         
-        // Si vous voulez hacher le mot de passe, utilisez PasswordHasherInterface
+        // Hashage de mot de passe
         $hashedPassword = $this->passwordHasher->hashPassword($user, $data['password']);
         $user->setPassword($hashedPassword);
 
         $user->setBirthday(new \DateTime($data['birthday']));
         
-        // Assurez-vous que chaque utilisateur a au moins ROLE_USER
         $user->setRoles(['ROLE_USER']);
         
-        // Utilisez EntityManager au lieu de repository->save()
         $entityManager->persist($user);
         $entityManager->flush();
         
