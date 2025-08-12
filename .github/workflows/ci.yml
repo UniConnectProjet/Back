@@ -1,93 +1,76 @@
-name: Symfony CI/CD
+name: Symfony Backend CI/CD
 
 on:
   push:
-    branches:
-      - main
-      - dev
-  pull_request:
-    branches:
-      - main
-      - dev
+    branches: [ main, dev ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test_db
-        ports:
-          - 3306:3306
-          
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install PHP and Composer
-        uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@v3
+      - uses: shivammathur/setup-php@v2
         with:
           php-version: 8.2
           extensions: mbstring, pdo, pdo_mysql
-          tools: composer, symfony
-
+          tools: composer
       - name: Install dependencies
         run: composer install --no-progress --no-interaction --prefer-dist
-
-      # - name: Run PHPUnit tests
-       # run: ./vendor/bin/phpunit
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Connexion DockerHub
+      - name: Login DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build & Push Docker backend image
+      # Build & push avec tags en dur selon la branche
+      - name: Build & push (main → prod/latest)
+        if: github.ref == 'refs/heads/main'
         run: |
-          docker build -t inesbrm1/uniconnect-backend:latest .
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          docker build -t inesbrm1/uniconnect-backend:prod -t inesbrm1/uniconnect-backend:latest -t inesbrm1/uniconnect-backend:${SHORT_SHA} .
+          docker push inesbrm1/uniconnect-backend:prod
           docker push inesbrm1/uniconnect-backend:latest
-      - name: Deploy to VPS
+          docker push inesbrm1/uniconnect-backend:${SHORT_SHA}
+
+      - name: Build & push (dev → preprod/dev-latest)
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          docker build -t inesbrm1/uniconnect-backend:preprod -t inesbrm1/uniconnect-backend:dev-latest -t inesbrm1/uniconnect-backend:${SHORT_SHA} .
+          docker push inesbrm1/uniconnect-backend:preprod
+          docker push inesbrm1/uniconnect-backend:dev-latest
+          docker push inesbrm1/uniconnect-backend:${SHORT_SHA}
+
+      # Déploiement avec tags explicites (pas de variables passées)
+      - name: Deploy PROD (main)
+        if: github.ref == 'refs/heads/main'
         uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            export JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
-            docker pull inesbrm1/uniconnect-backend:latest
-            docker compose down
-            docker compose up -d --build --remove-orphans
-      - name: Configurer les clés JWT et mettre à jour la base de données
+            docker pull inesbrm1/uniconnect-backend:prod
+            docker compose up -d --no-deps --build backend
+
+      - name: Deploy PREPROD (dev)
+        if: github.ref == 'refs/heads/dev'
         uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
-            # 1. Créer le dossier JWT en root
-            docker compose exec -T --user root backend mkdir -p config/jwt
-            # 2. Injecter les clés en base64 (décodées)
-            echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d | docker compose exec -T --user root backend sh -c 'cat > config/jwt/private.pem'
-            echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d | docker compose exec -T --user root backend sh -c 'cat > config/jwt/public.pem'
-            # 3. Fixer les permissions
-            docker compose exec -T --user root backend chmod 600 config/jwt/*.pem
-            # 4. Exporter la passphrase JWT dans le conteneur (si utile pour Symfony)
-            export JWT_PASSPHRASE="${{ secrets.JWT_PASSPHRASE }}"
-            # 5. Installer les dépendances
-            docker compose exec -T backend composer install --no-interaction --prefer-dist
-            # 6. Mise à jour du schéma
-            docker compose exec -T backend php bin/console doctrine:schema:update --force --no-interaction
+            docker pull inesbrm1/uniconnect-backend:preprod
+            docker compose up -d --no-deps --build backend-preprod
