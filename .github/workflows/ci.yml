@@ -1,4 +1,4 @@
-name: Symfony CI/CD
+name: Symfony Backend CI/CD
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
 
     services:
       mysql:
-        image: mysql:8.0
+        image: mysql:8
         env:
           MYSQL_DATABASE: app              
           MYSQL_USER: app
@@ -33,10 +33,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PHP and Composer
+      - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'               
+
           extensions: mbstring, pdo, pdo_mysql, intl
           tools: composer:v2
 
@@ -128,6 +129,7 @@ jobs:
 
       - name: Deploy to PREPROD (dev)
         if: github.ref == 'refs/heads/dev'
+
         uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.VPS_HOST }}

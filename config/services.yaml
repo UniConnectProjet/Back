@@ -16,6 +16,7 @@ services:
     App\:
         resource: '../src/'
         exclude:
+            - '../src/Command/'
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'

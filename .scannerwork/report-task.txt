@@ -1,0 +1,6 @@
+projectKey=symfony-uniconnect
+serverUrl=http://localhost:9002
+serverVersion=25.7.0.110598
+dashboardUrl=http://localhost:9002/dashboard?id=symfony-uniconnect
+ceTaskId=f7a0aa62-6d52-428b-926b-255ad563aac4
+ceTaskUrl=http://localhost:9002/api/ce/task?id=f7a0aa62-6d52-428b-926b-255ad563aac4
