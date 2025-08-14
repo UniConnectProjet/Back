@@ -2,22 +2,19 @@ name: Symfony CI/CD
 
 on:
   push:
-    branches:
-      - main
-      - dev
+    branches: [ main, dev ]
   pull_request:
-    branches:
-      - main
-      - dev
+    branches: [ main, dev ]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_DATABASE: app
+          MYSQL_DATABASE: app              
           MYSQL_USER: app
           MYSQL_PASSWORD: secret
           MYSQL_ROOT_PASSWORD: root
@@ -30,96 +27,138 @@ jobs:
 
     env:
       APP_ENV: test
-      # IMPORTANT : base sans _test ; Doctrine ajoutera _test via config/packages/test/doctrine.yaml
       DATABASE_URL: "mysql://app:secret@127.0.0.1:3306/app?serverVersion=8.0&charset=utf8mb4"
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install PHP and Composer
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.2
-          extensions: mbstring, pdo, pdo_mysql
-          tools: composer, symfony
+          php-version: '8.3'               
+          extensions: mbstring, pdo, pdo_mysql, intl
+          tools: composer:v2
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
 
       - name: Install dependencies
         run: composer install --no-progress --no-interaction --prefer-dist
 
       - name: Wait for MySQL to be ready
         run: |
-          for i in {1..30}; do
-            if mysqladmin ping -h127.0.0.1 -uroot -proot --silent; then
-              echo "MySQL is up"
-              break
-            fi
+          for i in `seq 1 30`; do
+            (echo > /dev/tcp/127.0.0.1/3306) >/dev/null 2>&1 && break
             echo "Waiting for MySQL..."
             sleep 2
           done
 
-      - name: Migrate test database schema
-        run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
+      # 1) Crée la DB de test (avec suffixe _test ajouté par Doctrine)
+      - name: Create test database
+        run: php bin/console doctrine:database:create --env=test --if-not-exists
+
+      # 2) Applique le schéma (migrations si présentes, sinon fallback)
+      - name: Migrate schema (or fallback to schema:update)
+        run: |
+          php bin/console doctrine:migrations:migrate --env=test --no-interaction || \
+          php bin/console doctrine:schema:update --force --env=test
 
       - name: Run PHPUnit tests
-        run: ./vendor/bin/phpunit --testdox
+        run: vendor/bin/phpunit --colors=never --testdox
 
+      - name: Composer security audit
+        run: composer audit
+        
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-and-test
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Connexion DockerHub
+      - name: Login DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build & Push Docker backend image
+      # Build & push avec tags selon la branche
+      - name: Build & push (main → prod/latest)
+        if: github.ref == 'refs/heads/main'
         run: |
-          docker build -t inesbrm1/uniconnect-backend:latest .
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          docker build -t inesbrm1/uniconnect-backend:prod \
+                       -t inesbrm1/uniconnect-backend:latest \
+                       -t inesbrm1/uniconnect-backend:${SHORT_SHA} .
+          docker push inesbrm1/uniconnect-backend:prod
           docker push inesbrm1/uniconnect-backend:latest
+          docker push inesbrm1/uniconnect-backend:${SHORT_SHA}
 
-      - name: Deploy to VPS
+      - name: Build & push (dev → preprod/dev-latest)
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+          docker build -t inesbrm1/uniconnect-backend:preprod \
+                       -t inesbrm1/uniconnect-backend:dev-latest \
+                       -t inesbrm1/uniconnect-backend:${SHORT_SHA} .
+          docker push inesbrm1/uniconnect-backend:preprod
+          docker push inesbrm1/uniconnect-backend:dev-latest
+          docker push inesbrm1/uniconnect-backend:${SHORT_SHA}
+
+      # Déploiement SSH : on met à jour le service sans down total
+      - name: Deploy to PROD (main)
+        if: github.ref == 'refs/heads/main'
         uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
-            export JWT_PASSPHRASE=${{ secrets.JWT_PASSPHRASE }}
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
-            docker pull inesbrm1/uniconnect-backend:latest
-            docker compose down
-            docker compose up -d --build --remove-orphans
+            docker pull inesbrm1/uniconnect-backend:prod
+            docker compose up -d --no-deps --pull always --no-build backend
 
-      - name: Configurer les clés JWT et mettre à jour la base de données
+      - name: Deploy to PREPROD (dev)
+        if: github.ref == 'refs/heads/dev'
         uses: appleboy/ssh-action@v0.1.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           script: |
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
-            # 1. Créer le dossier JWT en root
-            docker compose exec -T --user root backend mkdir -p config/jwt
+            docker pull inesbrm1/uniconnect-backend:preprod
+            docker compose up -d --no-deps --pull always --no-build backend-preprod
 
-            # 2. Injecter les clés en base64 (décodées)
+      # Post-deploy : clés JWT + schema update si nécessaire
+      - name: Configure JWT keys & update schema
+        uses: appleboy/ssh-action@v0.1.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script: |
+            set -e
+            cd /var/www
+
+            # Création clés JWT dans le conteneur
+            docker compose exec -T --user root backend mkdir -p config/jwt || true
             echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d | docker compose exec -T --user root backend sh -c 'cat > config/jwt/private.pem'
             echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d | docker compose exec -T --user root backend sh -c 'cat > config/jwt/public.pem'
-
-            # 3. Fixer les permissions
             docker compose exec -T --user root backend chmod 600 config/jwt/*.pem
 
-            # 4. Exporter la passphrase JWT dans le conteneur (si utile pour Symfony)
-            export JWT_PASSPHRASE="${{ secrets.JWT_PASSPHRASE }}"
-
-            # 5. Installer les dépendances
+            # Dépendances (si l'image ne les contient pas déjà)
             docker compose exec -T backend composer install --no-interaction --prefer-dist
 
-            # 6. Mise à jour du schéma
+            # Migrations DB applicatives
+            docker compose exec -T backend php bin/console doctrine:migrations:migrate --no-interaction || \
             docker compose exec -T backend php bin/console doctrine:schema:update --force --no-interaction
