@@ -7,11 +7,13 @@ use App\Entity\Student;
 use App\Entity\User;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Repository\StudentRepository;
 use App\Repository\ClasseRepository;
 use App\Repository\UserRepository;
 use App\Repository\SemesterRepository;
+use App\Repository\AbsenceRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 
@@ -119,6 +121,24 @@ class StudentController extends AbstractController
             true
         );
     }
+
+    #[Route('/api/student/{id}/semesters/absences', name: 'student.getAbsencesBySemester', methods: ['GET'])]
+    public function getAbsencesBySemestersForStudent(
+        int $id
+    ): JsonResponse {
+        $student = $this->repository->find($id);
+        if (!$student) {
+            return new JsonResponse(['message' => 'Student not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $json = $this->serializer->serialize($student, 'json', [
+            'groups' => ['getStudentAbsences'],
+            \Symfony\Component\Serializer\Normalizer\DateTimeNormalizer::FORMAT_KEY => \DateTimeInterface::ATOM, // ISO 8601
+        ]);
+        
+        return new JsonResponse($json, JsonResponse::HTTP_OK, [], true);
+    }
+
 
    #[Route('/api/student', name: 'student.add', methods:['POST'])]
     public function addStudent(

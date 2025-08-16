@@ -33,7 +33,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeInterface $birthday = null;
 
     #[ORM\Column(length: 180)]
-    #[Groups(['getAllSemesters', 'getAllStudents', 'getAllUsers', 'getUser'])]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser'])]
     private ?string $email = null;
 
     /**
