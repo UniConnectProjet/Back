@@ -49,15 +49,15 @@ class Classe
     /**
      * @var Collection<int, CourseSession>
      */
-    #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'clesse')]
-    private Collection $courseSessions;
+    #[ORM\OneToMany(mappedBy: 'classe', targetEntity: CourseSession::class, cascade: ['persist','remove'])]
+    private Collection $sessions;
 
     public function __construct()
     {
         $this->students = new ArrayCollection();
         $this->semesters = new ArrayCollection();
         $this->courses = new ArrayCollection();
-        $this->courseSessions = new ArrayCollection();
+        $this->sessions = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -188,27 +188,26 @@ class Classe
     /**
      * @return Collection<int, CourseSession>
      */
-    public function getCourseSessions(): Collection
+    public function getSessions(): Collection
     {
-        return $this->courseSessions;
+        return $this->sessions;
     }
 
-    public function addCourseSession(CourseSession $courseSession): static
+    public function addSession(CourseSession $s): static
     {
-        if (!$this->courseSessions->contains($courseSession)) {
-            $this->courseSessions->add($courseSession);
-            $courseSession->setClesse($this);
+        if (!$this->sessions->contains($s)) {
+            $this->sessions->add($s);
+            $s->setClasse($this);
         }
 
         return $this;
     }
 
-    public function removeCourseSession(CourseSession $courseSession): static
+    public function removeSession(CourseSession $s): static
     {
-        if ($this->courseSessions->removeElement($courseSession)) {
-            // set the owning side to null (unless already changed)
-            if ($courseSession->getClesse() === $this) {
-                $courseSession->setClesse(null);
+        if ($this->sessions->removeElement($s)) {
+            if ($s->getClasse() === $this) {
+                $s->setClasse(null);
             }
         }
 

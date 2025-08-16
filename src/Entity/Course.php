@@ -7,6 +7,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\CourseSession;
 
 #[ORM\Entity(repositoryClass: CourseRepository::class)]
 class Course
@@ -50,14 +51,14 @@ class Course
      * @var Collection<int, CourseSession>
      */
     #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'course')]
-    private Collection $courseSessions;
+    private Collection $sessions;
 
     public function __construct()
     {
         $this->grades = new ArrayCollection();
         $this->class_id = new ArrayCollection();
         $this->students = new ArrayCollection();
-        $this->courseSessions = new ArrayCollection();
+        $this->sessions = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -187,28 +188,27 @@ class Course
      */
     public function getCourseSessions(): Collection
     {
-        return $this->courseSessions;
+        return $this->sessions;
     }
 
-    public function addCourseSession(CourseSession $courseSession): static
+    public function addCourseSession(CourseSession $s): static
     {
-        if (!$this->courseSessions->contains($courseSession)) {
-            $this->courseSessions->add($courseSession);
-            $courseSession->setCourse($this);
+        if (!$this->sessions->contains($s)) {
+            $this->sessions->add($s);
+            $s->setCourse($this);
         }
 
         return $this;
     }
 
-    public function removeCourseSession(CourseSession $courseSession): static
+    public function removeCourseSession(CourseSession $s): static
     {
-        if ($this->courseSessions->removeElement($courseSession)) {
+        if ($this->sessions->removeElement($s)) {
             // set the owning side to null (unless already changed)
-            if ($courseSession->getCourse() === $this) {
-                $courseSession->setCourse(null);
+            if ($s->getCourse() === $this) {
+                $s->setCourse(null);
             }
         }
-
         return $this;
     }
 }

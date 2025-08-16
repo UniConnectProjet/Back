@@ -203,22 +203,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->courseSessions;
     }
 
-    public function addCourseSession(CourseSession $courseSession): static
+    public function addCourseSession(CourseSession $s): static
     {
-        if (!$this->courseSessions->contains($courseSession)) {
-            $this->courseSessions->add($courseSession);
-            $courseSession->setProfessor($this);
+        if (!$this->courseSessions->contains($s)) {
+            $this->courseSessions->add($s);
+            $s->setProfessor($this);
         }
 
         return $this;
     }
 
-    public function removeCourseSession(CourseSession $courseSession): static
+    public function removeCourseSession(CourseSession $s): static
     {
-        if ($this->courseSessions->removeElement($courseSession)) {
+        if ($this->courseSessions->removeElement($s)) {
             // set the owning side to null (unless already changed)
-            if ($courseSession->getProfessor() === $this) {
-                $courseSession->setProfessor(null);
+            if ($s->getProfessor() === $this) {
+                $s->setProfessor(null);
             }
         }
 
