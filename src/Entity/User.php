@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\UserRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -48,6 +50,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
     private ?Student $student = null;
+
+    /**
+     * @var Collection<int, CourseSession>
+     */
+    #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'professor')]
+    private Collection $courseSessions;
+
+    public function __construct()
+    {
+        $this->courseSessions = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -178,6 +191,36 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         }
 
         $this->student = $student;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CourseSession>
+     */
+    public function getCourseSessions(): Collection
+    {
+        return $this->courseSessions;
+    }
+
+    public function addCourseSession(CourseSession $courseSession): static
+    {
+        if (!$this->courseSessions->contains($courseSession)) {
+            $this->courseSessions->add($courseSession);
+            $courseSession->setProfessor($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourseSession(CourseSession $courseSession): static
+    {
+        if ($this->courseSessions->removeElement($courseSession)) {
+            // set the owning side to null (unless already changed)
+            if ($courseSession->getProfessor() === $this) {
+                $courseSession->setProfessor(null);
+            }
+        }
 
         return $this;
     }

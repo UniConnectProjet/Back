@@ -46,11 +46,18 @@ class Classe
     #[ORM\ManyToOne(inversedBy: 'classes')]
     private ?Category $category = null;
 
+    /**
+     * @var Collection<int, CourseSession>
+     */
+    #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'clesse')]
+    private Collection $courseSessions;
+
     public function __construct()
     {
         $this->students = new ArrayCollection();
         $this->semesters = new ArrayCollection();
         $this->courses = new ArrayCollection();
+        $this->courseSessions = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -174,6 +181,36 @@ class Classe
     public function setCategory(?Category $category): static
     {
         $this->category = $category;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CourseSession>
+     */
+    public function getCourseSessions(): Collection
+    {
+        return $this->courseSessions;
+    }
+
+    public function addCourseSession(CourseSession $courseSession): static
+    {
+        if (!$this->courseSessions->contains($courseSession)) {
+            $this->courseSessions->add($courseSession);
+            $courseSession->setClesse($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourseSession(CourseSession $courseSession): static
+    {
+        if ($this->courseSessions->removeElement($courseSession)) {
+            // set the owning side to null (unless already changed)
+            if ($courseSession->getClesse() === $this) {
+                $courseSession->setClesse(null);
+            }
+        }
 
         return $this;
     }

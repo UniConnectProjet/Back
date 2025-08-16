@@ -46,11 +46,18 @@ class Course
     #[ORM\ManyToMany(targetEntity: Student::class, mappedBy: 'courses')]
     private Collection $students;
 
+    /**
+     * @var Collection<int, CourseSession>
+     */
+    #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'course')]
+    private Collection $courseSessions;
+
     public function __construct()
     {
         $this->grades = new ArrayCollection();
         $this->class_id = new ArrayCollection();
         $this->students = new ArrayCollection();
+        $this->courseSessions = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -170,6 +177,36 @@ class Course
     {
         if ($this->students->removeElement($student)) {
             $student->removeCourse($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CourseSession>
+     */
+    public function getCourseSessions(): Collection
+    {
+        return $this->courseSessions;
+    }
+
+    public function addCourseSession(CourseSession $courseSession): static
+    {
+        if (!$this->courseSessions->contains($courseSession)) {
+            $this->courseSessions->add($courseSession);
+            $courseSession->setCourse($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourseSession(CourseSession $courseSession): static
+    {
+        if ($this->courseSessions->removeElement($courseSession)) {
+            // set the owning side to null (unless already changed)
+            if ($courseSession->getCourse() === $this) {
+                $courseSession->setCourse(null);
+            }
         }
 
         return $this;
