@@ -2,8 +2,9 @@
 
 namespace App\Controller;
 
+use App\Entity\Classe;
 use App\Entity\Student;
-
+use App\Entity\User;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -18,7 +19,7 @@ use Symfony\Component\HttpFoundation\Request;
 
 class StudentController extends AbstractController
 {
-
+    private const ROUTE_FOR_A_STUDENT = '/api/students/{id}';
     private StudentRepository $repository;
     private SerializerInterface $serializer;
 
@@ -50,7 +51,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.getOne', methods:['GET'])]
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.getOne', methods:['GET'])]
     public function getOneStudent(
         int $id
         ): JsonResponse
@@ -96,63 +97,48 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/student', name: 'student.add', methods:['POST'])]
+   #[Route('/api/student', name: 'student.add', methods:['POST'])]
     public function addStudent(
         Request $request,
         EntityManagerInterface $em,
         ClasseRepository $classeRepository,
         UserRepository $userRepository,
         SemesterRepository $semesterRepository
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $data = json_decode($request->getContent(), true);
-        
-        // Créer l'étudiant de base
+
         $student = new Student();
-        
-        // Gérer la relation avec la classe
-        if (isset($data['classe']['id'])) {
-            $classe = $classeRepository->find($data['classe']['id']);
-            if (!$classe) {
-                return new JsonResponse(['error' => 'Classe not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
-            $student->setClasse($classe);
-        } else {
-            return new JsonResponse(['error' => 'Classe is required'], JsonResponse::HTTP_BAD_REQUEST);
+
+        // Classe
+        $classe = $this->getClasseFromData($data, $classeRepository);
+        if (!$classe) {
+            return new JsonResponse(['error' => 'Classe not found or missing'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        
-        // Gérer la relation avec l'utilisateur
-        if (isset($data['user']['id'])) {
-            $user = $userRepository->find($data['user']['id']);
-            if (!$user) {
-                return new JsonResponse(['error' => 'User not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
-            $student->setUser($user);
-        } else {
-            return new JsonResponse(['error' => 'User is required'], JsonResponse::HTTP_BAD_REQUEST);
+        $student->setClasse($classe);
+
+        // User
+        $user = $this->getUserFromData($data, $userRepository);
+        if (!$user) {
+            return new JsonResponse(['error' => 'User not found or missing'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        
-        // Gérer la relation avec les semestres
-        if (isset($data['semesters']) && is_array($data['semesters'])) {
-            foreach ($data['semesters'] as $semesterData) {
-                if (isset($semesterData['id'])) {
-                    $semester = $semesterRepository->find($semesterData['id']);
-                    if ($semester) {
-                        $student->addSemester($semester);
-                    }
-                }
-            }
+        $student->setUser($user);
+
+        // Semesters
+        $semesters = $this->getSemestersFromData($data, $semesterRepository);
+        foreach ($semesters as $semester) {
+            $student->addSemester($semester);
         }
-        
+
         $em->persist($student);
         $em->flush();
+
         return new JsonResponse(
             ['message' => 'Student added successfully', 'id' => $student->getId()],
             JsonResponse::HTTP_CREATED
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.update', methods:['PUT'])]
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.update', methods:['PUT'])]
     public function updateStudent(
         Request $request,
         EntityManagerInterface $em,
@@ -160,61 +146,53 @@ class StudentController extends AbstractController
         UserRepository $userRepository,
         SemesterRepository $semesterRepository,
         int $id
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $student = $this->repository->find($id);
-        
+
         if (!$student) {
             return new JsonResponse(['error' => 'Student not found'], JsonResponse::HTTP_NOT_FOUND);
         }
-        
+
         $data = json_decode($request->getContent(), true);
-        
-        // Mettre à jour la relation avec la classe
-        if (isset($data['classe']['id'])) {
-            $classe = $classeRepository->find($data['classe']['id']);
-            if (!$classe) {
-                return new JsonResponse(['error' => 'Classe not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
+
+        // Classe
+        $classe = $this->getClasseFromData($data, $classeRepository);
+        if (isset($data['classe']['id']) && !$classe) {
+            return new JsonResponse(['error' => 'Classe not found'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        if ($classe) {
             $student->setClasse($classe);
         }
-        
-        // Mettre à jour la relation avec l'utilisateur
-        if (isset($data['user']['id'])) {
-            $user = $userRepository->find($data['user']['id']);
-            if (!$user) {
-                return new JsonResponse(['error' => 'User not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
+
+        // User
+        $user = $this->getUserFromData($data, $userRepository);
+        if (isset($data['user']['id']) && !$user) {
+            return new JsonResponse(['error' => 'User not found'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        if ($user) {
             $student->setUser($user);
         }
-        
-        // Mettre à jour la relation avec les semestres
+
+        // Semesters
         if (isset($data['semesters']) && is_array($data['semesters'])) {
-            // Supprimer tous les semestres actuels
             foreach ($student->getSemesters() as $semester) {
                 $student->removeSemester($semester);
             }
-            
-            // Ajouter les nouveaux semestres
-            foreach ($data['semesters'] as $semesterData) {
-                if (isset($semesterData['id'])) {
-                    $semester = $semesterRepository->find($semesterData['id']);
-                    if ($semester) {
-                        $student->addSemester($semester);
-                    }
-                }
+
+            foreach ($this->getSemestersFromData($data, $semesterRepository) as $semester) {
+                $student->addSemester($semester);
             }
         }
-        
+
         $em->flush();
-        
+
         return new JsonResponse(
             ['message' => 'Student updated successfully', 'id' => $student->getId()],
             JsonResponse::HTTP_OK
         );
     }
 
-    #[Route('/api/students/{id}', name: 'student.delete', methods:['DELETE'])]
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.delete', methods:['DELETE'])]
     public function deleteStudent(
         EntityManagerInterface $em,
         int $id
@@ -229,6 +207,42 @@ class StudentController extends AbstractController
             [],
             true
         );
+    }
+
+    private function getClasseFromData(array $data, ClasseRepository $classeRepository) : ?Classe
+    {
+        if (!isset($data['classe']['id'])) {
+            return null;
+        }
+
+        return $classeRepository->find($data['classe']['id']);
+    }
+
+    private function getUserFromData(array $data, UserRepository $userRepository): ?User
+    {
+        if (!isset($data['user']['id'])) {
+            return null;
+        }
+
+        return $userRepository->find($data['user']['id']);
+    }
+
+    private function getSemestersFromData(array $data, SemesterRepository $semesterRepository): array
+    {
+        $semesters = [];
+
+        if (isset($data['semesters']) && is_array($data['semesters'])) {
+            foreach ($data['semesters'] as $semesterData) {
+                if (isset($semesterData['id'])) {
+                    $semester = $semesterRepository->find($semesterData['id']);
+                    if ($semester) {
+                        $semesters[] = $semester;
+                    }
+                }
+            }
+        }
+
+        return $semesters;
     }
 
 }

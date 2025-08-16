@@ -15,31 +15,36 @@ use App\Entity\User;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Faker\Factory;
+use PhpParser\Node\Expr\Cast\Array_;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class AppFixtures extends Fixture
 {
     private UserPasswordHasherInterface $passwordHasher;
+    private int $nbCategories;
+    private int $nbNiveaux;
+    private int $classesParCombo;
+    private int $studentsParClasse;
+    private \Faker\Generator $faker;
 
     public function __construct(UserPasswordHasherInterface $passwordHasher)
     {
         $this->passwordHasher = $passwordHasher;
     }
-
-    public function load(ObjectManager $manager): void
+    private function initParameters(bool $isLight): void
     {
-        $isLight = getenv('FIXTURE_MODE') === 'light';
-        $nbCategories = $isLight ? 2 : 8;
-        $nbNiveaux = $isLight ? 2 : 6;
-        $classesParCombo = $isLight ? 2 : 5;
-        $studentsParClasse = $isLight ? 10 : 30;
+        $this->nbCategories = $isLight ? 2 : 8;
+        $this->nbNiveaux = $isLight ? 2 : 6;
+        $this->classesParCombo = $isLight ? 2 : 5;
+        $this->studentsParClasse = $isLight ? 10 : 30;
+    }
 
-        $faker = Factory::create('fr_FR');
 
+    private function createLevels(ObjectManager $manager): array{
         // Niveaux d'études
         $niveaux = array_slice([
             'Bac+1', 'Bac+2', 'Bac+3', 'Bac+4', 'Bac+5', 'Doctorat'
-        ], 0, $nbNiveaux);
+        ], 0, $this->nbNiveaux);
 
         $levels = [];
         foreach ($niveaux as $nom) {
@@ -48,11 +53,13 @@ class AppFixtures extends Fixture
             $manager->persist($level);
             $levels[] = $level;
         }
-
+        return $levels;
+    }
+    private function createCategories(ObjectManager $manager, array $levels): array {
         // Catégories
         $categoryNames = array_slice([
             'Informatique', 'Chimie', 'Génie Civil', 'Biologie', 'Mathématiques', 'Electronique', 'Physique', 'Gestion'
-        ], 0, $nbCategories);
+        ], 0, $this->nbCategories);
 
         $categories = [];
         foreach ($categoryNames as $catName) {
@@ -64,31 +71,16 @@ class AppFixtures extends Fixture
             $manager->persist($category);
             $categories[] = $category;
         }
+        return $categories;
+    }
 
-        // Certaines filières aient moins de niveaux
-        /*foreach ($categoryNames as $catName) {
-            $category = new Category();
-            $category->setName($catName);
-
-            if ($catName === 'Biologie') {
-                $category->addLevelId($levels[0]); // Bac+1
-                $category->addLevelId($levels[1]); // Bac+2
-            } else {
-                foreach ($levels as $level) {
-                    $category->addLevelId($level);
-                }
-            }
-
-            $manager->persist($category);
-        }*/
-
-
+    private function createClasses(ObjectManager $manager, array $categories, array $levels): array { 
         // Classes
         $classes = [];
         $classesByCategory = [];
         foreach ($categories as $category) {
             foreach ($levels as $level) {
-                for ($i = 1; $i <= $classesParCombo; $i++) {
+                for ($i = 1; $i <= $this->classesParCombo; $i++) {
                     $classe = new Classe();
                     $classe->setName("{$category->getName()} - {$level->getName()} - Classe $i");
                     $classe->setCategory($category);
@@ -99,44 +91,57 @@ class AppFixtures extends Fixture
                 }
             }
         }
+        return $classes;
+    }
 
+    private function createSemesters(ObjectManager $manager): array {
         // Semestres
         $semesters = [];
         for ($i = 1; $i <= 2; $i++) {
             $semester = new Semester();
             $semester->setName("Semestre $i");
-            $semester->setStartDate($faker->dateTimeThisYear);
-            $semester->setEndDate($faker->dateTimeThisYear);
+            $semester->setStartDate($this->faker->dateTimeThisYear);
+            $semester->setEndDate($this->faker->dateTimeThisYear);
             $manager->persist($semester);
             $semesters[] = $semester;
         }
+        return $semesters;
+    }
 
-        // Users + Students
-        $students = [];
+    private function createUsers(ObjectManager $manager, array $classes, array $semesters): array {
         $users = [];
-        foreach ($classes as $classe) {
-            for ($j = 0; $j < $studentsParClasse; $j++) {
+            for ($j = 0; $j < $this->studentsParClasse; $j++) {
                 $user = new User();
-                $user->setName($faker->firstName);
-                $user->setLastname($faker->lastName);
-                $user->setBirthday($faker->dateTimeBetween('-25 years', '-18 years'));
-                $user->setEmail($faker->unique()->safeEmail);
+                $user->setName($this->faker->firstName);
+                $user->setLastname($this->faker->lastName);
+                $user->setBirthday($this->faker->dateTimeBetween('-25 years', '-18 years'));
+                $user->setEmail($this->faker->unique()->safeEmail);
                 $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
                 $user->setRoles(['ROLE_USER']);
                 $manager->persist($user);
+                $users[] = $user;
+            }
+        return $users;
+    }
 
-                $student = new Student();
+    private function createStudents(ObjectManager $manager, array $classes, array $semesters, array $users): array {
+
+        $student = new Student();
+        foreach($users as $user){
+            foreach ($classes as $classe) {
                 $student->setUser($user);
                 $student->setClasse($classe);
                 foreach ($semesters as $semester) {
                     $student->addSemester($semester);
                 }
-                $manager->persist($student);
-                $users[] = $user;
-                $students[] = $student;
             }
-        }
-
+                $manager->persist($student);
+                $students[] = $student;
+        }            
+        return $users;
+    }
+    
+    private function createCourses(ObjectManager $manager, array $categories, array $levels, array $semesters, array $classes): array { 
         // Courses par catégorie
         $courseParCategorie = [
             'Informatique' => [
@@ -187,7 +192,9 @@ class AppFixtures extends Fixture
 
         foreach ($courseParCategorie as $categorieNom => $ues) {
             $category = $categoryByName[$categorieNom] ?? null;
-            if (!$category) continue;
+            if (!$category) {
+                continue;
+            }
 
             foreach ($ues as $ueName => $moduleNames) {
                 $courseUnit = new CourseUnit();
@@ -220,7 +227,10 @@ class AppFixtures extends Fixture
                 }
             }
         }
+        return $courses;
+    }
 
+    private function createGrades(ObjectManager $manager, array $students, array $courses): void { 
         // Grades
         foreach ($students as $student) {
             foreach ($courses as $course) {
@@ -228,28 +238,48 @@ class AppFixtures extends Fixture
                     $grade = new Grade();
                     $grade->setStudent($student);
                     $grade->setCourse($course);
-                    $grade->setTitle($faker->word);
+                    $grade->setTitle($this->faker->word);
                     $grade->setGrade(mt_rand(10, 20));
                     $grade->setDividor(mt_rand(10, 20));
                     $manager->persist($grade);
                 }
             }
         }
+     }
 
+    private function createAbsences(ObjectManager $manager, array $students, array $semesters): void { 
         // Absences
         foreach ($students as $student) {
             $absence = new Absence();
             $absence->setStudent($student);
-            $absence->setStartedDate($faker->dateTimeThisYear);
-            $absence->setEndedDate($faker->dateTimeThisYear);
-            $justified = $faker->boolean;
+            $absence->setStartedDate($this->faker->dateTimeThisYear);
+            $absence->setEndedDate($this->faker->dateTimeThisYear);
+            $justified = $this->faker->boolean;
             $absence->setJustified($justified);
             if ($justified) {
-                $absence->setJustification($faker->sentence);
+                $absence->setJustification($this->faker->sentence);
             }
             $absence->setSemester($semesters[array_rand($semesters)]);
             $manager->persist($absence);
         }
+     }
+    
+    public function load(ObjectManager $manager): void
+    {
+        $this->faker = Factory::create('fr_FR');
+        $isLight = getenv('FIXTURE_MODE') === 'light';
+
+        $this->initParameters($isLight);
+
+        $levels = $this->createLevels($manager);
+        $categories = $this->createCategories($manager, $levels);
+        $classes = $this->createClasses($manager, $categories, $levels);
+        $semesters = $this->createSemesters($manager);
+        $users = $this->createUsers($manager, $classes, $semesters);
+        $this->createStudents($manager, $classes, $semesters, $users);
+        $courses = $this->createCourses($manager, $categories, $levels, $semesters, $classes);
+        $this->createGrades($manager, $users, $courses);
+        $this->createAbsences($manager, $users, $semesters);
 
         $manager->flush();
     }
