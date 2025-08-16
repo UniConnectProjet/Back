@@ -105,7 +105,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/student/absences/{id}', name: 'student.getAbsences', methods:['GET'])]
+    #[Route('/api/student/{id}/absences', name: 'student.getAbsences', methods:['GET'])]
     public function getAbsencesByStudentId(
         int $id
         ): JsonResponse
