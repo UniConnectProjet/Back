@@ -66,6 +66,7 @@ class StudentController extends AbstractController
     }
 
     #[Route('/api/student/grades/{id}', name: 'student.getGrades', methods:['GET'])]
+    #[Route('/api/students/{id}/grades', name: 'student.getGrades.alt', methods:['GET'])]
     public function getGradesByStudentId(
         int $id
         ): JsonResponse
