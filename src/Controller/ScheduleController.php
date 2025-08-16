@@ -1,85 +1,47 @@
 <?php 
+// src/Controller/ScheduleController.php
 namespace App\Controller;
 
-use App\Repository\UserRepository;
-use App\Repository\StudentClasseRepository;
+use App\Repository\StudentRepository;
 use App\Repository\CourseSessionRepository;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
 class ScheduleController extends AbstractController
 {
-    #[Route('/api/students/{id}/schedule/next-day', name: 'schedule.next_day', methods: ['GET'])]
+    #[Route('/api/students/{id}/schedule/next-day', name: 'student.schedule_next_day', methods: ['GET'])]
     public function nextDay(
         int $id,
-        UserRepository $users,
-        StudentClasseRepository $studentClasseRepo,
+        StudentRepository $students,
         CourseSessionRepository $sessionsRepo
     ): JsonResponse {
-        $student = $users->find($id);
-        if (!$student) return new JsonResponse(['error' => 'Unknown student'], 404);
+        $student = $students->find($id);
+        if (!$student) return new JsonResponse(['message' => 'Student not found'], 404);
+        $classe = $student->getClasse();
+        if (!$classe) return new JsonResponse([], 200);
 
-        // récupère les classes de l’étudiant (table student_classe)
-        $links = $studentClasseRepo->findBy(['user' => $student]);
-        $classes = array_map(fn($l) => $l->getClasse(), $links);
-        if (!$classes) return new JsonResponse([], 200);
-
-        $from = (new \DateTimeImmutable('tomorrow'))->setTime(0, 0);
+        $tz = new \DateTimeZone('Europe/Paris'); // adapte si besoin
+        $from = (new \DateTimeImmutable('tomorrow', $tz))->setTime(0,0,0);
         $to   = $from->modify('+1 day');
 
-        $sessions = $sessionsRepo->findForClassesBetween($classes, $from, $to);
-        $events = array_map(function($s) {
-            $prof = $s->getProfessor();
+        $sessions = $sessionsRepo->findByClasseBetween($classe, $from, $to);
+
+        // payload plat et tolérant aux null (évite les 500 de sérialisation)
+        $payload = array_map(static function ($s) {
+            $course = $s->getCourse();
+            $prof   = method_exists($s, 'getProfessor') ? $s->getProfessor() : null;
             return [
-                'title' => $s->getCourse()->getName(),
-                'start' => $s->getStartAt()->format(\DATE_ATOM),
-                'end'   => $s->getEndAt()->format(\DATE_ATOM),
+                'title' => $course?->getName() ?? 'Cours',
+                'start' => $s->getStartAt()?->format(\DATE_ATOM),
+                'end'   => $s->getEndAt()?->format(\DATE_ATOM),
                 'extendedProps' => [
-                    'professor' => $prof ? ($prof->getFirstname().' '.$prof->getLastname()) : null,
-                    'location'  => $s->getRoom(),
+                    'professor' => $prof?->getLastname() ?? $prof?->getName() ?? null,
+                    'location'  => $s->getRoom() ?? null,
                 ],
             ];
         }, $sessions);
 
-        return new JsonResponse($events, 200);
-    }
-
-    #[Route('/api/students/{id}/schedule', name: 'schedule.range', methods: ['GET'])]
-    public function byRange(
-        int $id,
-        Request $request,
-        UserRepository $users,
-        StudentClasseRepository $studentClasseRepo,
-        CourseSessionRepository $sessionsRepo
-    ): JsonResponse {
-        $student = $users->find($id);
-        if (!$student) return new JsonResponse(['error' => 'Unknown student'], 404);
-
-        $links = $studentClasseRepo->findBy(['user' => $student]);
-        $classes = array_map(fn($l) => $l->getClasse(), $links);
-        if (!$classes) return new JsonResponse([], 200);
-
-        
-        $from = $request->query->get('from') ? new \DateTimeImmutable($request->query->get('from')) : new \DateTimeImmutable('monday this week');
-        $to   = $request->query->get('to')   ? new \DateTimeImmutable($request->query->get('to'))   : new \DateTimeImmutable('sunday this week 23:59');
-
-        $sessions = $sessionsRepo->findForClassesBetween($classes, $from, $to);
-
-        $events = array_map(function($s) {
-            $prof = $s->getProfessor();
-            return [
-                'title' => $s->getCourse()->getName(),
-                'start' => $s->getStartAt()->format(\DATE_ATOM),
-                'end'   => $s->getEndAt()->format(\DATE_ATOM),
-                'extendedProps' => [
-                    'professor' => $prof ? ($prof->getFirstname().' '.$prof->getLastname()) : null,
-                    'location'  => $s->getRoom(),
-                ],
-            ];
-        }, $sessions);
-
-        return new JsonResponse($events, 200);
+        return new JsonResponse($payload, 200);
     }
 }

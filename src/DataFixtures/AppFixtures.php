@@ -235,22 +235,54 @@ class AppFixtures extends Fixture
         return $courses;
     }
 
-    private function createGrades(ObjectManager $manager, array $students, array $courses): void { 
-        // Grades
-        foreach ($students as $student) {
-            foreach ($courses as $course) {
-                if ($course->getClassId()->contains($student->getClasse())) {
-                    $grade = new Grade();
-                    $grade->setStudent($student);
-                    $grade->setCourse($course);
-                    $grade->setTitle($this->faker->word);
-                    $grade->setGrade(mt_rand(10, 20));
-                    $grade->setDividor(mt_rand(10, 20));
-                    $manager->persist($grade);
-                }
+    private function createGrades(ObjectManager $manager, array $students, array $courses): void
+{
+    foreach ($students as $student) {
+        $studentClasse = $student->getClasse();
+        
+        $eligible = array_filter($courses, function ($course) use ($studentClasse) {
+            // cas le plus courant: ManyToMany "classes"
+            if (method_exists($course, 'getClasses') && $course->getClasses() !== null) {
+                return $course->getClasses()->contains($studentClasse);
             }
+            // si jamais la propriété s'appelle "classe"
+            if (method_exists($course, 'getClasse')) {
+                $cl = $course->getClasse();
+                if ($cl instanceof \Doctrine\Common\Collections\Collection) {
+                    return $cl->contains($studentClasse);
+                }
+                return $cl === $studentClasse;
+            }
+            return true;
+        });
+
+        // fallback si aucun cours "éligible"
+        if (!$eligible) {
+            $eligible = $courses;
+        }
+
+        $toPick = array_values($eligible);
+        shuffle($toPick);
+        $toPick = array_slice($toPick, 0, min(random_int(3, 6), count($toPick)));
+
+        foreach ($toPick as $course) {
+            // favorise /20 ; garantit grade <= dividor
+            $dividorChoices = [10, 16, 20, 20, 20];
+            $dividor = $dividorChoices[array_rand($dividorChoices)];
+            $grade   = random_int(0, $dividor);
+
+            $g = new Grade();
+            $g->setStudent($student);
+            $g->setCourse($course);
+            $g->setTitle($this->faker->randomElement(['TP', 'DS', 'Quiz', 'Projet']).' '.$this->faker->numberBetween(1, 3));
+            $g->setDividor($dividor);  // colonne 'dividor'
+            $g->setGrade($grade);    // colonne 'grade' 
+
+            $manager->persist($g);
         }
     }
+}
+
 
     private function createAbsences(ObjectManager $manager, array $students, array $semesters): void { 
         // Absences

@@ -51,6 +51,29 @@ class StudentController extends AbstractController
         );
     }
 
+    #[Route('/api/me/student', name: 'student.me', methods: ['GET'])]
+    public function getMyStudent(StudentRepository $repo): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user) {
+            return new JsonResponse(['message' => 'Unauthorized'], 401);
+        }
+
+        $student = $repo->findOneBy(['user' => $user]);
+        if (!$student) {
+            return new JsonResponse(['message' => 'No student for this user'], 404);
+        }
+
+        // Réponse minimaliste → pas de groupes nécessaires, évite les cycles
+        return new JsonResponse([
+            'id'     => $student->getId(),
+            'classe' => $student->getClasse() ? [
+                'id'   => $student->getClasse()->getId(),
+                'name' => $student->getClasse()->getName(),
+            ] : null,
+        ], 200);
+    }
+
     #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.getOne', methods:['GET'])]
     public function getOneStudent(
         int $id
