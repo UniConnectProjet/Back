@@ -236,72 +236,130 @@ class AppFixtures extends Fixture
     }
 
     private function createGrades(ObjectManager $manager, array $students, array $courses): void
-{
-    foreach ($students as $student) {
-        $studentClasse = $student->getClasse();
-        
-        $eligible = array_filter($courses, function ($course) use ($studentClasse) {
-            // cas le plus courant: ManyToMany "classes"
-            if (method_exists($course, 'getClasses') && $course->getClasses() !== null) {
-                return $course->getClasses()->contains($studentClasse);
-            }
-            // si jamais la propriété s'appelle "classe"
-            if (method_exists($course, 'getClasse')) {
-                $cl = $course->getClasse();
-                if ($cl instanceof \Doctrine\Common\Collections\Collection) {
-                    return $cl->contains($studentClasse);
-                }
-                return $cl === $studentClasse;
-            }
-            return true;
-        });
-
-        // fallback si aucun cours "éligible"
-        if (!$eligible) {
-            $eligible = $courses;
-        }
-
-        $toPick = array_values($eligible);
-        shuffle($toPick);
-        $toPick = array_slice($toPick, 0, min(random_int(3, 6), count($toPick)));
-
-        foreach ($toPick as $course) {
-            // favorise /20 ; garantit grade <= dividor
-            $dividorChoices = [10, 16, 20, 20, 20];
-            $dividor = $dividorChoices[array_rand($dividorChoices)];
-            $grade   = random_int(0, $dividor);
-
-            $g = new Grade();
-            $g->setStudent($student);
-            $g->setCourse($course);
-            $g->setTitle($this->faker->randomElement(['TP', 'DS', 'Quiz', 'Projet']).' '.$this->faker->numberBetween(1, 3));
-            $g->setDividor($dividor);  // colonne 'dividor'
-            $g->setGrade($grade);    // colonne 'grade' 
-
-            $manager->persist($g);
-        }
-    }
-}
-
-
-    private function createAbsences(ObjectManager $manager, array $students, array $semesters): void { 
-        // Absences
+    {
         foreach ($students as $student) {
-            $absence = new Absence();
-            $absence->setStudent($student);
-            $absence->setStartedDate($this->faker->dateTimeThisYear);
-            $absence->setEndedDate($this->faker->dateTimeThisYear);
-            $justified = $this->faker->boolean;
-            $absence->setJustified($justified);
-            if ($justified) {
-                $absence->setJustification($this->faker->sentence);
+            $studentClasse = $student->getClasse();
+            
+            $eligible = array_filter($courses, function ($course) use ($studentClasse) {
+                // cas le plus courant: ManyToMany "classes"
+                if (method_exists($course, 'getClasses') && $course->getClasses() !== null) {
+                    return $course->getClasses()->contains($studentClasse);
+                }
+                if (method_exists($course, 'getClasse')) {
+                    $cl = $course->getClasse();
+                    if ($cl instanceof \Doctrine\Common\Collections\Collection) {
+                        return $cl->contains($studentClasse);
+                    }
+                    return $cl === $studentClasse;
+                }
+                return true;
+            });
+
+            $toPick = array_values($eligible);
+            shuffle($toPick);
+            $toPick = array_slice($toPick, 0, min(random_int(3, 6), count($toPick)));
+
+            foreach ($toPick as $course) {
+                $dividorChoices = [10, 16, 20, 20, 20];
+                $dividor = $dividorChoices[array_rand($dividorChoices)];
+                $grade   = random_int(0, $dividor);
+
+                $g = new Grade();
+                $g->setStudent($student);
+                $g->setCourse($course);
+                $g->setTitle($this->faker->randomElement(['TP', 'DS', 'Quiz', 'Projet']).' '.$this->faker->numberBetween(1, 3));
+                $g->setDividor($dividor);
+                $g->setGrade($grade);
+
+                $manager->persist($g);
             }
-            $absence->setSemester($semesters[array_rand($semesters)]);
-            $manager->persist($absence);
         }
     }
 
-    // 🔹 Utils
+
+    private function createAbsences(ObjectManager $manager, array $students, array $semesters): void
+    {
+        // === Config souple ===
+        $tzName      = \date_default_timezone_get();
+        $minHour     = 8;    
+        $maxHour     = 19;   
+        $durations   = [60, 120]; 
+        $minSlots    = 1;     
+        $maxSlots    = 3;     
+        $minuteStep  = 60;   
+
+        $possibleMinutes = ($minuteStep >= 60)
+            ? [0]
+            : range(0, 59, max(1, min(59, $minuteStep)));
+
+        foreach ($students as $student) {
+            $day = $this->faker->dateTimeThisYear('now', $tzName);
+            $day->setTimezone(new \DateTimeZone($tzName));
+            $baseDay = (clone $day)->setTime(0, 0, 0);
+            $targetSlots = $this->faker->numberBetween($minSlots, $maxSlots);
+            $intervals = [];
+
+            $attempts = 0;
+            while (count($intervals) < $targetSlots && $attempts < 32) {
+                $attempts++;
+
+                $duration = $this->faker->randomElement($durations);
+                $lastStartHour = min($maxHour, 23 - intdiv($duration, 60));
+                if ($lastStartHour < $minHour) {
+                    break; // plage impossible avec cette durée
+                }
+
+                $startHour   = $this->faker->numberBetween($minHour, $lastStartHour);
+                $startMinute = $this->faker->randomElement($possibleMinutes);
+
+                $start = (clone $baseDay)->setTime($startHour, $startMinute, 0);
+                $end   = (clone $start)->modify("+{$duration} minutes");
+
+                if ($end->format('Y-m-d') !== $baseDay->format('Y-m-d')) {
+                    continue;
+                }
+
+                $overlap = false;
+                foreach ($intervals as [$s, $e]) {
+                    if ($start < $e && $end > $s) { $overlap = true; break; }
+                }
+                if ($overlap) continue;
+
+                $intervals[] = [$start, $end];
+            }
+
+            usort($intervals, fn($a, $b) => $a[0] <=> $b[0]);
+
+            foreach ($intervals as [$start, $end]) {
+                $absence = new Absence();
+                $absence->setStudent($student);
+                $absence->setStartedDate($start);
+                $absence->setEndedDate($end);
+
+                $justified = $this->faker->boolean();
+                $absence->setJustified($justified);
+                if ($justified) {
+                    $absence->setJustification($this->faker->sentence());
+                }
+
+                if (!empty($semesters)) {
+                    $semester = null;
+                    foreach ($semesters as $s) {
+                        if (method_exists($s, 'getStartDate') && method_exists($s, 'getEndDate')) {
+                            $sStart = $s->getStartDate();
+                            $sEnd   = $s->getEndDate();
+                            if ($sStart && $sEnd && $start >= $sStart && $end <= $sEnd) { $semester = $s; break; }
+                        }
+                    }
+                    $absence->setSemester($semester ?? $semesters[array_rand($semesters)]);
+                }
+
+                $manager->persist($absence);
+            }
+        }
+    }
+
+    // Utils
     private function hasRole(User $u, string $role): bool {
         return in_array($role, $u->getRoles() ?? [], true);
     }
