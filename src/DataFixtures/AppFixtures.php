@@ -126,6 +126,25 @@ class AppFixtures extends Fixture
         return $users;
     }
 
+    private function createProfessors(ObjectManager $manager, int $count = 8): array
+    {
+        $profs = [];
+        for ($i = 1; $i <= $count; $i++) {
+            $user = new User();
+            $user->setName('Prof' . $i);
+            $user->setLastname($this->faker->lastName());
+            $user->setBirthday($this->faker->dateTimeBetween('-60 years', '-30 years'));
+            $user->setEmail(sprintf('prof%d@example.com', $i));
+            $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
+            // On met les deux pour compatibilité avec ton libellé “professor”
+            $user->setRoles(['ROLE_PROFESSOR']);
+            $manager->persist($user);
+            $profs[] = $user;
+        }
+        return $profs;
+    }
+
+
     private function createStudents(ObjectManager $manager, array $classes, array $semesters, array $users): array
     {
         $students = [];
@@ -394,23 +413,12 @@ class AppFixtures extends Fixture
         }
     }
 
-    private function seedCourseSessions(ObjectManager $manager): void
+    private function seedCourseSessions(ObjectManager $manager, array $courses, array $classes, array $users): void
     {
-        $courseRepo = $manager->getRepository(Course::class);
-        $classeRepo = $manager->getRepository(Classe::class);
-        $userRepo   = $manager->getRepository(User::class);
-
-        /** @var Course[] $courses */
-        $courses = $courseRepo->findAll();
-        /** @var Classe[] $classes */
-        $classes = $classeRepo->findAll();
-        /** @var User[] $users */
-        $users   = $userRepo->findAll();
-
         if (!$courses || !$classes) return;
 
         // profs si dispo, sinon n’importe quel user
-        $professors = array_values(array_filter($users, fn(User $u) => $this->hasRole($u, 'ROLE_PROF')));
+        $professors = array_values(array_filter($users, fn(User $u) => $this->hasRole($u, 'ROLE_PROF') || $this->hasRole($u, 'ROLE_PROFESSOR')));
         if (!$professors) $professors = $users;
 
         // créneaux types (durée en minutes)
@@ -495,12 +503,13 @@ class AppFixtures extends Fixture
         $classes = $this->createClasses($manager, $categories, $levels);
         $semesters = $this->createSemesters($manager);
         $users = $this->createUsers($manager, $classes, $semesters);
+        $this->createProfessors($manager);
         $students = $this->createStudents($manager, $classes, $semesters, $users);
         $courses = $this->createCourses($manager, $categories, $levels, $semesters, $classes);
         $this->createGrades($manager, $students, $courses);
         $this->createAbsences($manager, $students, $semesters);
         $this->assignStudentsToClasses($manager);
-        $this->seedCourseSessions($manager); 
+        $this->seedCourseSessions($manager, $courses, $classes, $users); 
 
         $manager->flush();
     }
