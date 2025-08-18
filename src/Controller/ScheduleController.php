@@ -21,13 +21,12 @@ class ScheduleController extends AbstractController
         $classe = $student->getClasse();
         if (!$classe) return new JsonResponse([], 200);
 
-        $tz = new \DateTimeZone('Europe/Paris'); // adapte si besoin
+        $tz = new \DateTimeZone('Europe/Paris');
         $from = (new \DateTimeImmutable('tomorrow', $tz))->setTime(0,0,0);
         $to   = $from->modify('+1 day');
 
         $sessions = $sessionsRepo->findByClasseBetween($classe, $from, $to);
 
-        // payload plat et tolérant aux null (évite les 500 de sérialisation)
         $payload = array_map(static function ($s) {
             $course = $s->getCourse();
             $prof   = method_exists($s, 'getProfessor') ? $s->getProfessor() : null;
