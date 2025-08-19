@@ -1,0 +1,8 @@
+nelmio_cors:
+  paths:
+    '^/api/':
+      allow_origin: ['https://preprod.uni-connect.cloud/']
+      allow_credentials: true
+      allow_headers: ['Content-Type','Authorization','X-Requested-With']
+      allow_methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS']
+      max_age: 3600
