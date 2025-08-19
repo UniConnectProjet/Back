@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Repository\StudentRepository;
 use App\Repository\ClasseRepository;
+use App\Repository\GradeRepository;
 use App\Repository\UserRepository;
 use App\Repository\SemesterRepository;
 use App\Repository\AbsenceRepository;
@@ -19,17 +20,114 @@ use Symfony\Component\Serializer\SerializerInterface;
 
 use Symfony\Component\HttpFoundation\Request;
 
+#[Route('/api')]
 class StudentController extends AbstractController
 {
     private const ROUTE_FOR_A_STUDENT = '/api/students/{id}';
     private StudentRepository $repository;
     private SerializerInterface $serializer;
 
-    public function __construct(StudentRepository $repository, SerializerInterface $serializer)
+    public function __construct(
+        private StudentRepository $students,
+        private AbsenceRepository $absences,
+        private GradeRepository $grades,
+    ) {}
+
+    #[Route('/me/semesters/absences', name: 'api_me_semesters_absences', methods: ['GET'])]
+    public function meSemestersAbsences(): JsonResponse
     {
-        $this->repository = $repository;
-        $this->serializer = $serializer;
+        $user = $this->getUser();
+        $student = $this->students->findOneBy(['user' => $user]);
+        if (!$student) {
+            return $this->json(['message' => 'Not a student'], Response::HTTP_NOT_FOUND);
+        }
+
+        $blocks = $this->buildAbsenceBlocks($student->getId());
+        return $this->json($blocks, Response::HTTP_OK);
     }
+
+    /**
+     * Construit les "blocks" d'absences par semestre pour un étudiant.
+     * Retourne un ARRAY (pas de JsonResponse).
+     */
+    private function buildAbsenceBlocks(int $studentId): array
+    {
+        $student = $this->students->find($studentId);
+        if (!$student) {
+            return [];
+        }
+
+        $semesters = $student->getSemesters(); // Doctrine Collection|array
+        $blocks = [];
+
+        foreach ($semesters as $semester) {
+            $absences = $this->absences->findBy([
+                'student'  => $student,
+                'semester' => $semester,
+            ]);
+
+            $items = array_map(static function ($a) {
+                $start = method_exists($a, 'getStartedDate') ? $a->getStartedDate()
+                      : (method_exists($a, 'getStartedAt') ? $a->getStartedAt() : null);
+                $end   = method_exists($a, 'getEndedDate')   ? $a->getEndedDate()
+                      : (method_exists($a, 'getEndedAt')   ? $a->getEndedAt()   : null);
+
+                $justified = null;
+                if (method_exists($a, 'isJustified')) {
+                    $val = $a->isJustified();
+                    $justified = is_bool($val) ? $val : (($val === 0 || $val === 1) ? (bool)$val : null);
+                }
+
+                return [
+                    'id'            => $a->getId(),
+                    'startedDate'   => $start?->format(\DATE_ATOM),
+                    'endedDate'     => $end?->format(\DATE_ATOM),
+                    'justified'     => $justified,
+                    'justification' => method_exists($a, 'getJustification') ? $a->getJustification() : null,
+                ];
+            }, $absences);
+
+            $minutes = 0; $jMin = 0; $uMin = 0; $jCount = 0; $uCount = 0;
+            foreach ($items as $i) {
+                $s = !empty($i['startedDate']) ? new \DateTimeImmutable($i['startedDate']) : null;
+                $e = !empty($i['endedDate'])   ? new \DateTimeImmutable($i['endedDate'])   : null;
+                if ($s && $e) {
+                    $m = max(0, intdiv($e->getTimestamp() - $s->getTimestamp(), 60));
+                    $minutes += $m;
+                    if ($i['justified'] === true)  { $jMin += $m; $jCount++; }
+                    if ($i['justified'] === false) { $uMin += $m; $uCount++; }
+                }
+            }
+
+            $fmt = static fn(int $m) => sprintf('%dh%02d', intdiv(max(0,$m),60), max(0,$m)%60);
+
+            $blocks[] = [
+                'semester' => [
+                    'id'        => $semester->getId(),
+                    'name'      => method_exists($semester, 'getName') ? $semester->getName() : null,
+                    'startDate' => method_exists($semester, 'getStartDate') ? $semester->getStartDate()?->format('Y-m-d') : null,
+                    'endDate'   => method_exists($semester, 'getEndDate') ? $semester->getEndDate()?->format('Y-m-d') : null,
+                ],
+                'totals' => [
+                    'minutes'     => $minutes,
+                    'hhmm'        => $fmt($minutes),
+                    'justified'   => ['minutes' => $jMin, 'hhmm' => $fmt($jMin), 'count' => $jCount],
+                    'unjustified' => ['minutes' => $uMin, 'hhmm' => $fmt($uMin), 'count' => $uCount],
+                ],
+                'absences' => $items, 
+            ];
+        }
+        
+        usort($blocks, function ($a, $b) {
+            $ad = $a['semester']['startDate'] ?? null;
+            $bd = $b['semester']['startDate'] ?? null;
+            if ($ad && $bd) return strcmp($ad, $bd);
+            return ($a['semester']['id'] ?? 0) <=> ($b['semester']['id'] ?? 0);
+        });
+
+        return $blocks;
+    }
+
     #[Route('/student', name: 'app_student')]
     public function index(): JsonResponse
     {
@@ -40,7 +138,7 @@ class StudentController extends AbstractController
     }
 
 
-    #[Route('/api/students', name: 'student.getAll', methods:['GET'])]
+    #[Route('/students', name: 'student.getAll', methods:['GET'])]
     public function getAllStudents(): JsonResponse
     {
         $student =  $this->repository->findAll();
@@ -53,7 +151,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/me/student', name: 'student.me', methods: ['GET'])]
+    #[Route('/me/student', name: 'student.me', methods: ['GET'])]
     public function getMyStudent(StudentRepository $repo): JsonResponse
     {
         $user = $this->getUser();
@@ -66,7 +164,6 @@ class StudentController extends AbstractController
             return new JsonResponse(['message' => 'No student for this user'], 404);
         }
 
-        // Réponse minimaliste → pas de groupes nécessaires, évite les cycles
         return new JsonResponse([
             'id'     => $student->getId(),
             'classe' => $student->getClasse() ? [
@@ -75,39 +172,82 @@ class StudentController extends AbstractController
             ] : null,
         ], 200);
     }
-
-    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.getOne', methods:['GET'])]
-    public function getOneStudent(
-        int $id
-        ): JsonResponse
+    
+    #[Route('/me/grades', name: 'api_me_grades', methods: ['GET'])]
+    public function meGrades(): JsonResponse
     {
-        $student =  $this->repository->find($id);
-        $jsonStudent = $this->serializer->serialize($student, 'json',["groups" => "getAllStudents"]);
-        return new JsonResponse(    
-            $jsonStudent,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+        $user = $this->getUser();
+        $student = $this->students->findOneBy(['user' => $user]);
+        if (!$student) {
+            return $this->json(['message' => 'Not a student'], 404);
+        }
+
+        $payload = $this->buildGradesPayload($student->getId());
+        return $this->json($payload);
     }
 
-    #[Route('/api/student/grades/{id}', name: 'student.getGrades', methods:['GET'])]
-    #[Route('/api/students/{id}/grades', name: 'student.getGrades.alt', methods:['GET'])]
-    public function getGradesByStudentId(
-        int $id
-        ): JsonResponse
+    private function buildGradesPayload(int $studentId): array
     {
-        $student =  $this->repository->find($id);
-        $jsonStudent = $this->serializer->serialize($student, 'json',["groups" => "getStudentGrades"]);
-        return new JsonResponse(    
-            $jsonStudent,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
-    }
+        $student = $this->students->find($studentId);
+        if (!$student) {
+            return ['grades' => []];
+        }
 
-    #[Route('/api/student/{id}/absences', name: 'student.getAbsences', methods:['GET'])]
+        $rows = $this->grades->findBy(['student' => $student]);
+
+        foreach ($rows as $g) {
+            $course = $g->getCourse();
+            $cid    = $course?->getId();
+
+            if ($cid === null) {
+                continue;
+            }
+
+            if (!isset($byCourse[$cid])) {
+                $byCourse[$cid] = [
+                    'name'  => method_exists($course, 'getName') ? $course->getName() : null,
+                    'sum20' => 0.0,
+                    'count' => 0,
+                ];
+            }
+
+            $grade   = $g->getGrade();
+            $dividor = $g->getDividor() ?: 0;
+
+            if ($grade !== null && $dividor > 0) {
+                $value20 = (float)$grade / (float)$dividor * 20.0;
+                $byCourse[$cid]['sum20'] += $value20;
+                $byCourse[$cid]['count']++;
+            }
+        }
+
+        $courseAvg20 = []; 
+        foreach ($byCourse as $cid => $acc) {
+            $courseAvg20[$cid] = $acc['count'] > 0
+                ? round($acc['sum20'] / $acc['count'], 2)
+                : null;
+        }
+
+        $grades = array_map(function ($g) use ($courseAvg20) {
+            $course = $g->getCourse();
+            $cid    = $course?->getId();
+
+            return [
+                'id'    => $g->getId(),
+                'grade' => $g->getGrade(),     
+                'divisor' => $g->getDividor(),   
+                'title' => $g->getTitle(),
+                'course' => [
+                    'id'      => $cid,
+                    'name'    => $course?->getName(),
+                    'average' => $cid !== null ? ($courseAvg20[$cid] ?? null) : null,
+                ],
+            ];
+        }, $rows);
+
+        return ['grades' => $grades];
+    }
+    #[Route('/student/{id}/absences', name: 'student.getAbsences', methods:['GET'])]
     public function getAbsencesByStudentId(
         int $id
         ): JsonResponse
@@ -122,159 +262,7 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/api/student/{id}/absences/stats', name: 'student.absences.stats', methods: ['GET'])]
-    public function getAbsenceStatsForStudent(
-        int $id,
-        StudentRepository $students
-    ): JsonResponse {
-        $student = $students->find($id);
-        if (!$student) {
-            return new JsonResponse(['message' => 'Student not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        $totalMinutes = 0;      
-        $justifiedMin = 0;        
-        $unjustifiedMin = 0;      
-        $justifiedCount = 0;
-        $unjustifiedCount = 0;
-
-        foreach ($student->getAbsences() as $a) {
-            $start = method_exists($a,'getStartedDate') ? $a->getStartedDate() : (method_exists($a,'getStartedAt') ? $a->getStartedAt() : null);
-            $end   = method_exists($a,'getEndedDate')   ? $a->getEndedDate()   : (method_exists($a,'getEndedAt')   ? $a->getEndedAt()   : null);
-            if (!$start instanceof \DateTimeInterface || !$end instanceof \DateTimeInterface) {
-                continue;
-            }
-
-            $minutes = max(0, intdiv($end->getTimestamp() - $start->getTimestamp(), 60));
-            $totalMinutes += $minutes;
-
-            $isJustified = null;
-            if (method_exists($a, 'isJustified')) {
-                $val = $a->isJustified();
-                if ($val === 0 || $val === 1)      { $isJustified = (bool)$val; }
-                elseif (is_bool($val))             { $isJustified = $val; }
-            }
-
-            if ($isJustified === true) {
-                $justifiedMin += $minutes;
-                $justifiedCount++;
-            } elseif ($isJustified === false) {
-                $unjustifiedMin += $minutes;
-                $unjustifiedCount++;
-            }
-        }
-
-        $fmt = static function (int $m): string {
-            $m = max(0, $m);
-            return sprintf('%dh%02d', intdiv($m, 60), $m % 60);
-        };
-
-        return new JsonResponse([
-            'total' => [
-                'minutes' => $totalMinutes,
-                'hhmm'    => $fmt($totalMinutes),         
-            ],
-            'breakdown' => [
-                'justified' => [
-                    'minutes' => $justifiedMin,
-                    'hhmm'    => $fmt($justifiedMin),       
-                    'count'   => $justifiedCount,           
-                ],
-                'unjustified' => [
-                    'minutes' => $unjustifiedMin,
-                    'hhmm'    => $fmt($unjustifiedMin),     
-                    'count'   => $unjustifiedCount,         
-                ],
-            ],
-        ], Response::HTTP_OK);
-    }
-
-    #[Route('/api/student/{id}/semesters/absences', name: 'student.semesters.absences', methods: ['GET'])]
-    public function getAbsencesBySemesterIncludingEmpty(
-        int $id,
-        StudentRepository $students,
-        AbsenceRepository $absencesRepo
-    ): JsonResponse {
-        $student = $students->find($id);
-        if (!$student) {
-            return new JsonResponse(['message' => 'Student not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        $semesters = $student->getSemesters(); 
-        $payload = [];
-
-        foreach ($semesters as $semester) {
-            $absences = $absencesRepo->findBy([
-                'student'  => $student,
-                'semester' => $semester,
-            ]);
-
-            // Map des absences (tolérant aux null)
-            $items = array_map(static function ($a) {
-                $start = method_exists($a, 'getStartedDate') ? $a->getStartedDate() : (method_exists($a, 'getStartedAt') ? $a->getStartedAt() : null);
-                $end   = method_exists($a, 'getEndedDate')   ? $a->getEndedDate()   : (method_exists($a, 'getEndedAt')   ? $a->getEndedAt()   : null);
-
-                // normalise justified: bool|0|1|null -> bool|null
-                $j = null;
-                if (method_exists($a, 'isJustified')) {
-                    $val = $a->isJustified();
-                    if ($val === 0 || $val === 1) { $j = (bool)$val; }
-                    elseif (is_bool($val)) { $j = $val; }
-                }
-
-                return [
-                    'id'            => $a->getId(),
-                    'startedDate'   => $start?->format(\DATE_ATOM),
-                    'endedDate'     => $end?->format(\DATE_ATOM),
-                    'justified'     => $j,
-                    'justification' => method_exists($a, 'getJustification') ? $a->getJustification() : null,
-                ];
-            }, $absences);
-
-            // Totaux par semestre (même si $items est vide)
-            $minutes = 0; $jMin = 0; $uMin = 0; $jCount = 0; $uCount = 0;
-            foreach ($items as $i) {
-                $s = isset($i['startedDate']) ? new \DateTimeImmutable($i['startedDate']) : null;
-                $e = isset($i['endedDate'])   ? new \DateTimeImmutable($i['endedDate'])   : null;
-                if ($s && $e) {
-                    $m = max(0, intdiv($e->getTimestamp() - $s->getTimestamp(), 60));
-                    $minutes += $m;
-                    if ($i['justified'] === true)  { $jMin += $m; $jCount++; }
-                    if ($i['justified'] === false) { $uMin += $m; $uCount++; }
-                }
-            }
-
-            $fmt = static fn(int $m) => sprintf('%dh%02d', intdiv(max(0,$m),60), max(0,$m)%60);
-
-            $payload[] = [
-                'semester' => [
-                    'id'        => $semester->getId(),
-                    'name'      => method_exists($semester, 'getName') ? $semester->getName() : null,
-                    'startDate' => method_exists($semester, 'getStartDate') ? $semester->getStartDate()?->format('Y-m-d') : null,
-                    'endDate'   => method_exists($semester, 'getEndDate') ? $semester->getEndDate()?->format('Y-m-d') : null,
-                ],
-                'totals' => [
-                    'minutes'     => $minutes,
-                    'hhmm'        => $fmt($minutes),
-                    'justified'   => ['minutes' => $jMin, 'hhmm' => $fmt($jMin), 'count' => $jCount],
-                    'unjustified' => ['minutes' => $uMin, 'hhmm' => $fmt($uMin), 'count' => $uCount],
-                ],
-                'absences' => $items, // peut être []
-            ];
-        }
-
-        // Tri par date de début (si dispo), sinon par id
-        usort($payload, function ($a, $b) {
-            $ad = $a['semester']['startDate'] ?? null;
-            $bd = $b['semester']['startDate'] ?? null;
-            if ($ad && $bd) return strcmp($ad, $bd);
-            return ($a['semester']['id'] ?? 0) <=> ($b['semester']['id'] ?? 0);
-        });
-
-        return new JsonResponse($payload, Response::HTTP_OK);
-    }
-
-   #[Route('/api/student', name: 'student.add', methods:['POST'])]
+   #[Route('/student', name: 'student.add', methods:['POST'])]
     public function addStudent(
         Request $request,
         EntityManagerInterface $em,

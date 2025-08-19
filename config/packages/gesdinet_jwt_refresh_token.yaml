@@ -1,7 +1,8 @@
 gesdinet_jwt_refresh_token:
-  ttl: 1209600                     
-  ttl_update: true                 
+  refresh_token_class: App\Entity\RefreshToken
+  ttl: 1209600
   firewall: api
-  user_provider: app_user_provider
-  refresh_token_class: Gesdinet\JWTRefreshTokenBundle\Entity\RefreshToken
-  # token_parameter_name: refresh_token   # (par défaut)
+  user_provider: security.user.provider.concrete.app_user_provider
+  token_parameter_name: refresh_token
+  single_use: false
+  manager_type: orm

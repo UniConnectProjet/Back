@@ -21,9 +21,9 @@ final class InjectRefreshFromCookieSubscriber implements EventSubscriberInterfac
 
         if ($req->request->has('refresh_token')) return;
 
-        $cookie = $req->cookies->get('__Host-refresh') ?? $req->cookies->get('refresh');
-        if ($cookie) {
-            $req->request->set('refresh_token', $cookie);
-        }
+        $cookie = $req->cookies->get('REFRESH_TOKEN') ?? $req->cookies->get('__Host-REFRESH_TOKEN');
+        if (!$cookie) return; // on laisse le bundle répondre 400/401
+
+        $req->request->set('refresh_token', $cookie);
     }
 }
