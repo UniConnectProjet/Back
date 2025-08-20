@@ -51,11 +51,9 @@ jobs:
 
       - name: Prepare test database
         run: |
-          php bin/console doctrine:database:drop --env=test --if-exists --force || true
           php bin/console doctrine:database:create --env=test --if-not-exists
-          # selon ton projet, migrations OU schema:create
           php bin/console doctrine:migrations:migrate --no-interaction --env=test
-          # php bin/console doctrine:schema:create --env=test
+          php bin/console doctrine:fixtures:load --env=test --group=test --no-interaction
 
 
       - name: Run PHPUnit (coverage + junit)
