@@ -25,7 +25,7 @@ jobs:
 
     env:
       APP_ENV: test
-      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/uniconnect_test"
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/uniconnect"
 
     steps:
       - uses: actions/checkout@v4
