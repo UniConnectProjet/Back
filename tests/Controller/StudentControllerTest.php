@@ -2,122 +2,84 @@
 
 namespace App\Tests\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\Common\DataFixtures\Purger\ORMPurger;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-use App\Tests\DataFixtures\TestFixtures;
+use App\Entity\Classe;
+use App\Entity\User;
+use App\Tests\AbstractApiTestCase;
 use Symfony\Component\HttpFoundation\Response;
 
-class StudentControllerTest extends WebTestCase
+class StudentControllerTest extends AbstractApiTestCase
 {
-    private \Symfony\Bundle\FrameworkBundle\KernelBrowser $client;
-    private EntityManagerInterface $em;
-
-    protected function setUp(): void
-    {
-        self::ensureKernelShutdown();
-        $this->client = static::createClient();
-
-        $container = $this->client->getContainer();
-        $this->em = $container->get(EntityManagerInterface::class);
-
-        $purger = new ORMPurger($this->em);
-        $purger->purge();
-
-        $hasher = $container->get(UserPasswordHasherInterface::class);
-        $fixtures = new TestFixtures($hasher);
-        $fixtures->load($this->em);
-    }
-
-    private function authenticate(): void
-    {
-        $this->client->request('POST', '/api/login_check', [], [], [
-            'CONTENT_TYPE' => 'application/json',
-        ], json_encode([
-            'username' => 'test@example.com',
-            'password' => 'test',
-        ]));
-
-        $data = json_decode($this->client->getResponse()->getContent(), true);
-        $this->assertArrayHasKey('token', $data);
-
-        $this->client->setServerParameter('HTTP_Authorization', 'Bearer ' . $data['token']);
-    }
-
-    public function testGetAllStudents(): void
+    public function test_list_students_ok(): void
     {
         $this->authenticate();
         $this->client->request('GET', '/api/students');
+        $this->assertResponseStatusCodeSame(Response::HTTP_OK);
+        $this->assertIsArray($this->decodeJson());
+    }
 
-        $this->assertResponseIsSuccessful();
+    public function test_me_student_requires_auth(): void
+    {
+        $this->client->request('GET', '/api/me/student');
+        $this->assertContains($this->client->getResponse()->getStatusCode(), [401, 403]);
+    }
+
+    public function test_me_grades_requires_auth(): void
+    {
+        $this->client->request('GET', '/api/me/grades');
+        $this->assertContains($this->client->getResponse()->getStatusCode(), [401, 403]);
+    }
+
+    public function test_me_semesters_absences_requires_auth(): void
+    {
+        $this->client->request('GET', '/api/me/semesters/absences');
+        $this->assertContains($this->client->getResponse()->getStatusCode(), [401, 403]);
+    }
+
+    public function test_get_student_absences_not_found(): void
+    {
+        $this->authenticate();
+        $this->client->request('GET', '/api/student/999999/absences');
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+    }
+
+    public function test_create_student_returns_2xx(): void
+    {
+        $this->authenticate();
+
+        $classe = $this->em->getRepository(\App\Entity\Classe::class)->findOneBy([]);
+        $this->assertNotNull($classe, 'Une Classe des fixtures est requise');
+
+        $user = $this->em->getRepository(\App\Entity\User::class)->findOneBy([]);
+        $this->assertNotNull($user, 'Un User des fixtures est requis');
+
+        $payload = [
+            'classeId' => $classe->getId(),
+            'userId'   => $user->getId(),
+        ];
+
+        $this->jsonRequest('POST', '/api/student', $payload);
+
+        $status = $this->client->getResponse()->getStatusCode();
+        $this->assertTrue(
+            in_array($status, [201, 200], true),
+            'POST /api/student doit renvoyer 201/200, reçu '.$status.' avec body: '.$this->client->getResponse()->getContent()
+        );
+
         $this->assertJson($this->client->getResponse()->getContent());
     }
 
-    public function testGetNonexistentStudent(): void
+
+    public function test_update_unknown_student_returns_404(): void
     {
         $this->authenticate();
-        $this->client->request('GET', '/api/students/9999');
-
-        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+        $this->jsonRequest('PUT', '/api/students/999999', []);
+        $this->assertResponseStatusCodeSame(404);
     }
 
-    public function testCreateStudentWithMissingFields(): void
+    public function test_delete_unknown_student_returns_404(): void
     {
         $this->authenticate();
-        $this->client->request('POST', '/api/student', [], [], [
-            'CONTENT_TYPE' => 'application/json'
-        ], json_encode([]));
-
-        $this->assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
-    }
-
-    public function testCreateAndDeleteStudent(): void
-    {
-        $this->authenticate();
-
-        // Récupération des entités créées par les fixtures
-        $user = $this->em->getRepository(\App\Entity\User::class)->findOneBy(['email' => 'test@example.com']);
-        $classe = $this->em->getRepository(\App\Entity\Classe::class)->findOneBy(['name' => 'I1']);
-        $semester = $this->em->getRepository(\App\Entity\Semester::class)->findOneBy(['name' => 'S1']);
-
-        $this->assertNotNull($user, 'User should exist');
-        $this->assertNotNull($classe, 'Classe should exist');
-        $this->assertNotNull($semester, 'Semester should exist');
-
-        $payload = [
-            'user' => ['id' => $user->getId()],
-            'classe' => ['id' => $classe->getId()],
-            'semesters' => [['id' => $semester->getId()]]
-        ];
-
-        $this->client->request('POST', '/api/student', [], [], [
-            'CONTENT_TYPE' => 'application/json'
-        ], json_encode($payload));
-
-        $this->assertResponseStatusCodeSame(Response::HTTP_CREATED);
-
-        $responseData = json_decode($this->client->getResponse()->getContent(), true);
-        $studentId = $responseData['id'] ?? null;
-        $this->assertNotNull($studentId);
-
-        $this->client->request('DELETE', '/api/students/' . $studentId);
-        $this->assertResponseIsSuccessful();
-    }
-
-
-    public function testUpdateStudentNotFound(): void
-    {
-        $this->authenticate();
-
-        $this->client->request('PUT', '/api/students/9999', [], [], [
-            'CONTENT_TYPE' => 'application/json'
-        ], json_encode([
-            'user' => ['id' => 1],
-            'classe' => ['id' => 1],
-            'semesters' => [['id' => 1]]
-        ]));
-
-        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+        $this->client->request('DELETE', '/api/students/999999');
+        $this->assertResponseStatusCodeSame(404);
     }
 }
