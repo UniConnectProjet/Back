@@ -14,12 +14,13 @@ use Symfony\Component\Serializer\SerializerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Response;
 
+#[Route('/api/absences')]
 class AbsenceController extends AbstractController
 {
     /**
      * Récupère les absences avec des filtres dynamiques.
      * 
-     * @Route("/api/absences", name="absence.getAll", methods={"GET"})
+     * @Route("/", name="absence.getAll", methods={"GET"})
      * 
      * @param AbsenceRepository $repository Le repository des absences.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -27,7 +28,7 @@ class AbsenceController extends AbstractController
      * 
      * @return JsonResponse La liste des absences filtrées.
      */
-    #[Route('/api/absences', name: 'absence.getAll', methods: ['GET'])]
+    #[Route('/', name: 'absence.getAll', methods: ['GET'])]
     public function getAbsences(
         AbsenceRepository $repository,
         SerializerInterface $serializer,
@@ -58,7 +59,7 @@ class AbsenceController extends AbstractController
     /**
      * Récupère toutes les absences pour un semestre donné.
      * 
-     * @Route("/api/absences/semester/{semesterId}", name="absence.getBySemester", methods={"GET"})
+     * @Route("/semester/{semesterId}", name="absence.getBySemester", methods={"GET"})
      * 
      * @param AbsenceRepository $repository Le repository des absences.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -66,7 +67,7 @@ class AbsenceController extends AbstractController
      * 
      * @return JsonResponse La liste des absences pour le semestre.
      */
-    #[Route('/api/absences/semester/{semesterId}', name: 'absence.getBySemester', methods: ['GET'])]
+    #[Route('/semester/{semesterId}', name: 'absence.getBySemester', methods: ['GET'])]
     public function getAbsencesBySemester(
         AbsenceRepository $repository,
         SerializerInterface $serializer,
@@ -86,7 +87,7 @@ class AbsenceController extends AbstractController
     /**
      * Met à jour une absence donnée.
      * 
-     * @Route("/api/absences/{absenceId}", name="absence.update", methods={"PUT"})
+     * @Route("/{absenceId}", name="absence.update", methods={"PUT"})
      * 
      * @param AbsenceRepository $repository Le repository des absences.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -97,7 +98,7 @@ class AbsenceController extends AbstractController
      * @return JsonResponse L'absence mise à jour.
      */
 
-    #[Route('/api/absences/{absenceId}', name: 'absence.update', methods: ['PUT'])]
+    #[Route('/{absenceId}', name: 'absence.update', methods: ['PUT'])]
     public function updateAbsence(
         AbsenceRepository $repository,
         SerializerInterface $serializer,
@@ -134,7 +135,7 @@ class AbsenceController extends AbstractController
     /**
      * Crée une absence pour un étudiant donné.
      * 
-     * @Route("/api/absences/student/{studentId}", name="absence.create", methods={"POST"})
+     * @Route("/student/{studentId}", name="absence.create", methods={"POST"})
      * 
      * @param StudentRepository $studentRepository Le repository des étudiants.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -146,7 +147,7 @@ class AbsenceController extends AbstractController
      */
     
     
-    #[Route('/api/absences/student/{studentId}/semester/{semesterId}', name: 'absence.create', methods: ['POST'])]
+    #[Route('/student/{studentId}/semester/{semesterId}', name: 'absence.createForStudent', methods: ['POST'])]
     public function createAbsenceForStudent(
         StudentRepository $studentRepository,
         SemesterRepository $semesterRepository,
@@ -184,7 +185,7 @@ class AbsenceController extends AbstractController
         );
     }
 
-    #[Route('/api/absences/{absenceId}', name: 'absence.delete', methods: ['DELETE'])]
+    #[Route('/{absenceId}', name: 'absence.deleteAbsence', methods: ['DELETE'])]
     public function deleteAbsence(
         AbsenceRepository $repository,
         EntityManagerInterface $em,

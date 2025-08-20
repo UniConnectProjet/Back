@@ -12,6 +12,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Response;
 
+#[Route('/api/courses')]
 class CourseController extends AbstractController
 {
     /**
@@ -32,14 +33,14 @@ class CourseController extends AbstractController
     /**
      * Récupère tous les modules.
      * 
-     * @Route("/api/courses", name="course.getAll", methods={"GET"})
+     * @Route("/", name="course.getAll", methods={"GET"})
      * 
      * @param CourseRepository $repository Le repository des modules.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
      * 
      * @return JsonResponse La liste de tous les modules.
      */
-    #[Route('/api/courses', name: 'course.getAll', methods:['GET'])]
+    #[Route('/', name: 'course.getAll', methods:['GET'])]
     public function getAllCourses(
         CourseRepository $repository,
         SerializerInterface $serializer
@@ -58,7 +59,7 @@ class CourseController extends AbstractController
     /**
      * Récupère les modules liés à un étudiant.
      * 
-     * @Route("/api/course/student/{studentId}", name="course.getByStudent", methods={"GET"})
+     * @Route("/student/{studentId}", name="course.getByStudent", methods={"GET"})
      * 
      * @param CourseRepository $repository Le repository des modules.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -66,7 +67,7 @@ class CourseController extends AbstractController
      * 
      * @return JsonResponse La liste des modules de l'étudiant.
      */
-    #[Route('/api/course/student/{studentId}', name: 'course.getByStudent', methods:['GET'])]
+    #[Route('/student/{studentId}', name: 'course.getByStudent', methods:['GET'])]
     public function getCourseByStudentId(
         CourseRepository $repository,
         SerializerInterface $serializer,
@@ -86,7 +87,7 @@ class CourseController extends AbstractController
     /**
      * Récupère les modules liés à une unité d'enseignement.
      * 
-     * @Route("/api/course/courseUnit/{courseUnitId}", name="course.getByCourseUnit", methods={"GET"})
+     * @Route("/courseUnit/{courseUnitId}", name="course.getByCourseUnit", methods={"GET"})
      * 
      * @param CourseRepository $repository Le repository des modules.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -94,7 +95,7 @@ class CourseController extends AbstractController
      * 
      * @return JsonResponse La liste des modules de l'unité.
      */
-    #[Route('/api/course/courseUnit/{courseUnitId}', name: 'course.getByCourseUnit', methods:['GET'])]
+    #[Route('/courseUnit/{courseUnitId}', name: 'course.getByCourseUnit', methods:['GET'])]
     public function getCourseByCourseUnitId(
         CourseRepository $repository,
         SerializerInterface $serializer,
@@ -114,7 +115,7 @@ class CourseController extends AbstractController
     /**
      * Supprime un module.
      * 
-     * @Route("/api/course/{id}", name="course.delete", methods={"DELETE"})
+     * @Route("/{id}", name="course.delete", methods={"DELETE"})
      * 
      * @param CourseRepository $repository Le repository des modules.
      * @param EntityManagerInterface $em Le gestionnaire d'entités Doctrine.
@@ -122,7 +123,7 @@ class CourseController extends AbstractController
      * 
      * @return JsonResponse Réponse vide ou erreur si le module n'existe pas.
      */
-    #[Route('/api/course/{id}', name: 'course.delete', methods:['DELETE'])]
+    #[Route('/{id}', name: 'course.delete', methods:['DELETE'])]
     public function deleteCourse(
         CourseRepository $repository,
         EntityManagerInterface $em,
@@ -142,7 +143,7 @@ class CourseController extends AbstractController
     /**
      * Crée un nouveau module.
      * 
-     * @Route("/api/course", name="course.create", methods={"POST"})
+     * @Route("/", name="course.create", methods={"POST"})
      * 
      * @param Request $request La requête contenant les données du module.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -150,7 +151,7 @@ class CourseController extends AbstractController
      * 
      * @return JsonResponse Le statut de création du module.
      */
-    #[Route('/api/course', name: 'course.create', methods:['POST'])]
+    #[Route('/', name: 'course.create', methods:['POST'])]
     public function createCourse(
         Request $request,
         SerializerInterface $serializer,
@@ -173,7 +174,7 @@ class CourseController extends AbstractController
     /**
      * Met à jour un module existant.
      * 
-     * @Route("/api/course/{id}", name="course.update", methods={"PUT"})
+     * @Route("/{id}", name="course.update", methods={"PUT"})
      * 
      * @param CourseRepository $repository Le repository des modules.
      * @param Request $request La requête contenant les données à mettre à jour.
@@ -183,7 +184,7 @@ class CourseController extends AbstractController
      * 
      * @return JsonResponse Le statut de mise à jour du module.
      */
-    #[Route('/api/course/{id}', name: 'course.update', methods:['PUT'])]
+    #[Route('/{id}', name: 'course.update', methods:['PUT'])]
     public function updateCourse(
         CourseRepository $repository,
         Request $request,

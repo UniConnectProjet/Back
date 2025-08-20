@@ -1,15 +1,23 @@
 # Backend Setup
 [Voir le changelog du projet](CHANGELOG.md)
 
-Ce guide explique comment démarrer le backend de l'application avec Docker.
+
+Ce guide explique comment configurer, exécuter et tester le backend de l'application Uniconnect, en local avec ou sans Docker.
+
+# Sommaire 
+1. Prérequis
+2. Installation locale (XAMPP)
+3. Exécution des tests
+4. Déploiement avec Docker
+5. Démarrage du VPS
 
 ## Prérequis
 
-- **Php** : Assurez-vous que Php est installé sur votre machine.
+- **Php (8.2)** : Assurez-vous que Php est installé sur votre machine.
 
 - **Composer** : Assurez-vous que Composer est installé sur votre machine.
 
-- **Docker** : Assurez-vous que Docker et Docker Compose sont installés sur votre machine.
+- **Docker & Docker Compose** : Assurez-vous que Docker et Docker Compose sont installés sur votre machine.
   
   - Si vous n'avez pas encore installé Docker, vous pouvez le faire en suivant les instructions officielles :  
     [Installation Docker](https://docs.docker.com/get-docker/)
@@ -21,59 +29,49 @@ Ce guide explique comment démarrer le backend de l'application avec Docker.
  - Si vous n'avez pas encore installé Xampp, vous pourvez le faire en suivant les instructions officielles : 
     [Installation Xampp](https://www.apachefriends.org/fr/index.html)
 
+## Installation locale (XAMPP)
+
 1. **Cloner le dépôt**
+```bash
+    git clone https://github.com/UniConnectProjet/Back.git
+    cd Back
+```
 
-   Si ce n'est pas déjà fait, clonez le dépôt du projet sur votre machine locale.
+2. **Installer les dépendances PHP**
+```bash 
+    composer i
+```
 
-   ```bash
-        git clone https://github.com/UniConnectProjet/Back.git
-        cd Back
-   ```
+3. **Configuration de la base de données locale**
 
-## Démarrer l'environnement en local 
+    Lancer **XAMPP**, démarrer **Apache** et **MySQL**.
 
-Après avoir installé tous les prérequis :
+**a. Supprimer l'ancienne BDD (optionnel)**
+```bash
+    php bin/console doctrine:database:drop --force
+```
 
-1. **Installer les dépendances du backend**
-    ```bash
-        composer i
-    ```
+**b. Créer la bdd**
+```bash 
+    php bin/console doctrine:database:create
+```
+Si ça échoue, créer la base manuellement via phpmyadmin
 
-2. **Configuration de la base de données en local**
+**c. Créer & exécuter les migrations**
+```bash
+    php bin/console make:migration
+    php bin/console doctrine:migrations:migrate
+```
 
-    ### Supprimer la bdd
-    ```bash
-        php bin/console doctrine:database:drop --force
-    ```
+**d. Charger les fixtures**
+```bash
+    php bin/console app:fixtures:load --mode=light
+```
 
-    #### Etape 1 : Démarrer Apache et MySQL sur Xampp (version Desktop)
-
-    #### Etape 2 : Création de la base de données
-    ```bash
-        php bin/console doctrine:database:create
-    ```
-    Si ça ne fonctionne pas, faire directement la création sur phpmyadmin 
-
-    #### Etape 3 : Création de la migration 
-    ```bash
-        php bin/console make:migration 
-    ```
-
-    #### Etape 4 : Exécuter la migration pour la création des tables 
-    ```bash
-        php bin/console doctrine:migrations:migrate 
-    ```
-
-    #### Etape 5 : Exécuter les fixtures 
-    ```bash
-        php bin/console app:fixtures:load --mode=light
-    ```
-
-    #### Etape 6 : Démarrer en local 
-    ```bash
-        php -S 127.0.0.1:8000 -t public
-    ```
-
+**e. Lancer le serveur local**
+```bash
+    php -S 127.0.0.1:8000 -t public
+```
 
 ## Démarrer l'environnement avec Docker
 
@@ -81,7 +79,7 @@ Après avoir installé tous les prérequis :
 
    Dans le répertoire racine du projet, il y a un fichier .env.docker qui contient les paramètres de la base de données. Assurez-vous que le fichier .env.docker est configuré avec les bonnes valeurs pour DATABASE_URL.
 
-   Exemple de configuration :
+Exemple de configuration :
    ```bash
         DATABASE_URL="mysql://symfony:symfony@db:3306/symfony"
    ```
@@ -148,10 +146,35 @@ Après avoir installé tous les prérequis :
     ```arduino
         http://localhost:8000
     ```
+## Exécution des tests
 
-### Démarrer le VPS
+### Prérequis
+Avant de lancer les tests, assurez-vous que :
+- La base de données test est correctement configurée (dans ```.env.test```)
+- Les migrations ont été bien exécutées : 
+```bash
+    php bin/console doctrine:migrations:migrate --env=test
+```
 
-1. **Se connecter au vps**
-    ```bash
-        ssh ubuntu@54.36.191.40
-    ```
+### Lancer tous les tests
+```bash
+    php bin/phpunit --testdox
+```
+Cela exécute tous les tests présents dans le répertoire ```tests/``` avec un affichage lisible.
+
+### Structure des tests
+- Les tests sont dans le dossier ``tests/``
+- Les tests d'entités valident les getters/setters et les relations
+- Les tests fonctionnels utilisent ``WebTestCase`` pour simuler des requêtes HTTP
+
+### Base de données de test et fixtures
+Avant chaque test fonctionnel :
+- La base est vidée (``ORMPurger``)
+- Un utilisateur est injecté via des fixtures personnalisées (``TestUserFixtures``)
+- L'utilisateur de test à l'email ``test@example.com`` et le mot de passe ``test``
+
+### Authentification JWT dans les tests
+Une grande partie des tests utilisent une méthode ``createAuthentificatedClient`` qui :
+- Envoie une requête ``POST /api/login_check`` avec les identifiants
+- Récupère le token JWT de la réponse 
+- L'utilise pour authentifier les requêtes via l'en-tête ``Authorization: Bearer <token>

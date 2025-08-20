@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 
+#[Route('/api/levels')]
 final class LevelController extends AbstractController
 {
     private LevelRepository $repository;
@@ -28,46 +29,36 @@ final class LevelController extends AbstractController
         ]);
     }
 
-    #[Route('/api/levels', name: 'level.getAll', methods:['GET'])]
+    #[Route('/', name: 'level.getAll', methods: ['GET'])]
     public function getAllLevels(): JsonResponse
     {
-        $levels =  $this->repository->findAll();
-        $jsonLevel = $this->serializer->serialize($levels, 'json',["groups" => "getAllLevels"]);
-        return new JsonResponse(    
-            $jsonLevel,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+        $levels = $this->repository->findAll();
+        $jsonLevel = $this->serializer->serialize($levels, 'json', ['groups' => 'getAllLevels']);
+
+        return new JsonResponse($jsonLevel, JsonResponse::HTTP_OK, [], true);
     }
 
-    #[Route('/api/level/{levelId}', name: 'level.getOne', methods:['GET'])]
-    public function getLevel(
-        int $id
-        ): JsonResponse
+    #[Route('/{id}', name: 'level.getOne', methods: ['GET'])]
+    public function getLevel(int $id): JsonResponse
     {
-        $level =  $this->repository->find($id);
-        $jsonLevel = $this->serializer->serialize($level, 'json',["groups" => "getAllLevels"]);
-        return new JsonResponse(    
-            $jsonLevel,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+        $level = $this->repository->find($id);
+        if (!$level) {
+            return new JsonResponse(['error' => 'Level not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $jsonLevel = $this->serializer->serialize($level, 'json', ['groups' => 'getAllLevels']);
+        return new JsonResponse($jsonLevel, JsonResponse::HTTP_OK, [], true);
     }
 
-    #[Route('/api/level/{levelId}/classes', name: 'level.getClasses', methods:['GET'])]
-    public function getClassesFromLevel(
-        int $id
-        ): JsonResponse
+    #[Route('/{id}/classes', name: 'level.getClasses', methods: ['GET'])]
+    public function getClassesFromLevel(int $id): JsonResponse
     {
-        $level =  $this->repository->find($id);
-        $jsonLevel = $this->serializer->serialize($level, 'json',["groups" => "getLevelClasses"]);
-        return new JsonResponse(    
-            $jsonLevel,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+        $level = $this->repository->find($id);
+        if (!$level) {
+            return new JsonResponse(['error' => 'Level not found'], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $jsonLevel = $this->serializer->serialize($level, 'json', ['groups' => 'getLevelClasses']);
+        return new JsonResponse($jsonLevel, JsonResponse::HTTP_OK, [], true);
     }
 }

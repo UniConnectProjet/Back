@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\HttpFoundation\Request;
 
+#[Route('/api/course/units')]
 class CourseUnitController extends AbstractController
 {
     private const ERROR_COURSE_UNIT_NOT_FOUND = 'Course Unit not found';
@@ -32,14 +33,14 @@ class CourseUnitController extends AbstractController
     /**
      * Récupère toutes les unités d'enseignement (UE).
      * 
-     * @Route("/api/course/units", name="courseUnit.getAll", methods={"GET"})
+     * @Route("/", name="courseUnit.getAll", methods={"GET"})
      * 
      * @param CourseUnitRepository $repository Le repository des unités d'enseignement.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
      * 
      * @return JsonResponse La liste de toutes les UE.
      */
-    #[Route('/api/course/units', name: 'courseUnit.getAll', methods:['GET'])]
+    #[Route('/', name: 'courseUnit.getAll', methods:['GET'])]
     public function getAllCourseUnits(
         CourseUnitRepository $repository,
         SerializerInterface $serializer
@@ -58,7 +59,7 @@ class CourseUnitController extends AbstractController
     /**
      * Récupère une unité d'enseignement (UE) spécifique.
      * 
-     * @Route("/api/course/unit/{courseUnitId}", name="courseUnit.getById", methods={"GET"})
+     * @Route("/{courseUnitId}", name="courseUnit.getById", methods={"GET"})
      * 
      * @param CourseUnitRepository $repository Le repository des unités d'enseignement.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -66,7 +67,7 @@ class CourseUnitController extends AbstractController
      * 
      * @return JsonResponse L'UE demandée ou une erreur 404.
      */
-    #[Route('/api/course/unit/{courseUnitId}', name: 'courseUnit.getById', methods:['GET'])]
+    #[Route('/{courseUnitId}', name: 'courseUnit.getById', methods:['GET'])]
     public function getCourseUnit(
         CourseUnitRepository $repository,
         SerializerInterface $serializer,
@@ -91,7 +92,7 @@ class CourseUnitController extends AbstractController
     /**
      * Récupère les modules (Courses) d'une unité d'enseignement (UE).
      * 
-     * @Route("/api/course/unit/{courseUnitId}/modules", name="courseUnit.getCourse", methods={"GET"})
+     * @Route("/{courseUnitId}/modules", name="courseUnit.getCourse", methods={"GET"})
      * 
      * @param CourseUnitRepository $repository Le repository des unités d'enseignement.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -99,7 +100,7 @@ class CourseUnitController extends AbstractController
      * 
      * @return JsonResponse Les modules associés à l'UE.
      */
-    #[Route('/api/course/unit/{courseUnitId}/modules', name: 'courseUnit.getCourse', methods:['GET'])]
+    #[Route('/{courseUnitId}/modules', name: 'courseUnit.getCourse', methods:['GET'])]
     public function getCourseByCourseUnit(
         CourseUnitRepository $repository,
         SerializerInterface $serializer,
@@ -125,7 +126,7 @@ class CourseUnitController extends AbstractController
     /**
      * Récupère les UE d'un étudiant.
      * 
-     * @Route("/api/course/units/student/{studentId}", name="courseUnit.getByStudent", methods={"GET"})
+     * @Route("/student/{studentId}", name="courseUnit.getByStudent", methods={"GET"})
      * 
      * @param CourseUnitRepository $repository Le repository des unités d'enseignement.
      * @param SerializerInterface $serializer Le sérialiseur pour transformer les données en JSON.
@@ -133,7 +134,7 @@ class CourseUnitController extends AbstractController
      * 
      * @return JsonResponse Les UE associées à l'étudiant.
      */
-    #[Route('/api/course/units/student/{studentId}', name: 'courseUnit.getByStudent', methods:['GET'])]
+    #[Route('/student/{studentId}', name: 'courseUnit.getByStudent', methods:['GET'])]
     public function getCourseUnitsByStudent(
         CourseUnitRepository $repository,
         SerializerInterface $serializer,
@@ -153,7 +154,7 @@ class CourseUnitController extends AbstractController
     /**
      * Associe un module (Course) à une unité d'enseignement (UE).
      * 
-     * @Route("/api/course/unit/{courseUnitId}/addCourse/{courseId}", name="courseUnit.addCourse", methods={"POST"})
+     * @Route("/{courseUnitId}/addCourse/{courseId}", name="courseUnit.addCourse", methods={"POST"})
      * 
      * @param CourseUnitRepository $courseUnitRepository Le repository des unités d'enseignement.
      * @param CourseRepository $courseRepository Le repository des modules.
@@ -163,7 +164,7 @@ class CourseUnitController extends AbstractController
      * 
      * @return JsonResponse Confirmation ou erreur si l'UE ou le module n'existe pas.
      */
-    #[Route('/api/course/unit/{courseUnitId}/addCourse/{courseId}', name: 'courseUnit.addCourse', methods:['POST'])]
+    #[Route('/{courseUnitId}/addCourse/{courseId}', name: 'courseUnit.addCourse', methods:['POST'])]
     public function addCourseToCourseUnit(
         CourseUnitRepository $courseUnitRepository,
         CourseRepository $courseRepository,
@@ -194,7 +195,7 @@ class CourseUnitController extends AbstractController
     /**
      * Supprime un module (Course) d'une unité d'enseignement (UE).
      * 
-     * @Route("/api/course/unit/{courseUnitId}/removeModule/{courseId}", name="courseUnit.removeCourse", methods={"DELETE"})
+     * @Route("/{courseUnitId}/removeModule/{courseId}", name="courseUnit.removeCourse", methods={"DELETE"})
      * 
      * @param CourseUnitRepository $courseUnitRepository Le repository des unités d'enseignement.
      * @param CourseRepository $courseRepository Le repository des modules.
@@ -204,7 +205,7 @@ class CourseUnitController extends AbstractController
      * 
      * @return JsonResponse Confirmation ou erreur si l'UE ou le module n'existe pas.
      */
-    #[Route('/api/course/unit/{courseUnitId}/removeModule/{courseId}', name: 'courseUnit.removeCourse', methods:['DELETE'])]
+    #[Route('/{courseUnitId}/removeModule/{courseId}', name: 'courseUnit.removeCourse', methods:['DELETE'])]
     public function removeCourseFromCourseUnit(
         CourseUnitRepository $courseUnitRepository,
         CourseRepository $courseRepository,
@@ -240,7 +241,7 @@ class CourseUnitController extends AbstractController
     /**
      * Calcule la moyenne des moyennes des modules associés à une UE et la stocke dans l'UE.
      * 
-     * @Route("/api/course/unit/{courseUnitId}/calculateAverage", name="courseUnit.calculateAverage", methods={"POST"})
+     * @Route("/{courseUnitId}/calculateAverage", name="courseUnit.calculateAverage", methods={"POST"})
      * 
      * @param CourseUnitRepository $courseUnitRepository Le repository des unités d'enseignement.
      * @param EntityManagerInterface $entityManager Le gestionnaire d'entités Doctrine.

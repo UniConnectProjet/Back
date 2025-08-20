@@ -9,6 +9,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Serializer\SerializerInterface;
 
+#[Route('/api/categories')]
 final class CategoryController extends AbstractController
 {
     #[Route('/category', name: 'app_category')]
@@ -20,7 +21,7 @@ final class CategoryController extends AbstractController
         ]);
     }
 
-    #[Route('/api/categories/{id}/courses', name: 'category.courses', methods: ['GET'])]
+    #[Route('/{id}/courses', name: 'category.courses', methods: ['GET'])]
     public function getCoursesByCategory(
         Category $category,
         SerializerInterface $serializer
@@ -36,7 +37,7 @@ final class CategoryController extends AbstractController
         return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
-    #[Route('/api/categories/{id}/levels', name: 'category.levels', methods: ['GET'])]
+    #[Route('/{id}/levels', name: 'category.levels', methods: ['GET'])]
     public function getLevelsByCategory(
         Category $category,
         SerializerInterface $serializer

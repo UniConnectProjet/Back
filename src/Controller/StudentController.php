@@ -150,7 +150,7 @@ class StudentController extends AbstractController
             true
         );
     }
-
+  
     #[Route('/me/student', name: 'student.me', methods: ['GET'])]
     public function getMyStudent(StudentRepository $repo): JsonResponse
     {
@@ -302,6 +302,7 @@ class StudentController extends AbstractController
             JsonResponse::HTTP_CREATED
         );
     }
+
 
     #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.update', methods:['PUT'])]
     public function updateStudent(

@@ -1,0 +1,4 @@
+doctrine:
+  dbal:
+    # ajoute automatiquement "_test" au nom de base défini dans DATABASE_URL
+    dbname_suffix: '_test%env(default::TEST_TOKEN)%'
