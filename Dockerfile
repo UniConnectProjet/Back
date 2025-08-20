@@ -15,17 +15,23 @@ RUN composer dump-autoload --optimize --classmap-authoritative --no-interaction
 
 FROM php:8.3-fpm
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git unzip libzip-dev zlib1g-dev libicu-dev \
-  && docker-php-ext-install -j"$(nproc)" zip pdo_mysql opcache \
+RUN apt-get update && apt-get install -y \
+    git unzip libzip-dev curl zip libicu-dev \
+  && docker-php-ext-install pdo_mysql zip opcache \
+  && docker-php-ext-configure intl \
   && docker-php-ext-install intl \
   && rm -rf /var/lib/apt/lists/*
-
+  
 RUN useradd -m -u 1000 symfony
 
 WORKDIR /var/www/html
 
-COPY --from=vendor --chown=symfony:symfony /app ./
+# Copier les clés générées dans ton repo (ex: config/jwt)
+COPY --chown=symfony:symfony config/jwt /etc/jwt
+RUN chmod 640 /etc/jwt/*.pem
+
+# Copier le code + vendors depuis le stage builder
+COPY --from=vendor /app /var/www/html
 
 RUN mkdir -p var/cache var/log \
  && chown -R symfony:symfony var \
