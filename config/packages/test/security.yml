@@ -1,0 +1,16 @@
+security:
+  providers:
+    app_user_provider:
+      entity:
+        class: App\Entity\User
+        property: email
+
+  firewalls:
+    main:
+      stateless: false           
+      lazy: true
+      provider: app_user_provider
+      custom_authenticators: []
+
+  access_control:
+    - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }

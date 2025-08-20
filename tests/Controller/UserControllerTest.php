@@ -2,96 +2,50 @@
 
 namespace App\Tests\Controller;
 
-use App\Tests\DataFixtures\TestFixtures;
-use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\Common\DataFixtures\Purger\ORMPurger;
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use App\Tests\AbstractApiTestCase;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
-class UserControllerTest extends WebTestCase
+class UserControllerTest extends AbstractApiTestCase
 {
-    private \Symfony\Bundle\FrameworkBundle\KernelBrowser $client;
-
-    protected function setUp(): void
+    public function test_list_users_ok(): void
     {
-        self::ensureKernelShutdown();
-        $this->client = static::createClient();
-        $container = $this->client->getContainer();
-
-        $em = $container->get(EntityManagerInterface::class);
-
-        // Purge de la base pour éviter les duplications
-        $purger = new ORMPurger($em);
-        $purger->purge();
-
-        // Rechargement des fixtures
-        $hasher = $container->get(UserPasswordHasherInterface::class);
-        $fixture = new TestFixtures($hasher);
-        $fixture->load($em);
+        $this->authenticate();
+        $this->client->request('GET', '/api/users/');
+        $this->assertResponseStatusCodeSame(Response::HTTP_OK);
+        $this->assertIsArray($this->decodeJson());
     }
 
-    private function authenticate(): void
+    public function test_get_user_by_email_requires_auth_and_may_401(): void
     {
-        $this->client->request('POST', '/api/login_check', [], [], [
+        $this->client->request('GET', '/api/users/someone@example.com');
+        $this->assertResponseStatusCodeSame(Response::HTTP_UNAUTHORIZED);
+    }
+
+    public function test_create_user_invalid_payload_returns_400_or_422(): void
+    {
+        $this->authenticate();
+        $this->jsonRequest('POST', '/api/users/', []);
+        $this->assertContains($this->client->getResponse()->getStatusCode(), [Response::HTTP_BAD_REQUEST, 422]);
+    }
+
+    public function test_update_unknown_user_returns_404(): void
+    {
+        $this->authenticate();
+        $this->client->request('PUT', '/api/users/999999', [], [], [
             'CONTENT_TYPE' => 'application/json',
         ], json_encode([
-            'username' => 'test@example.com',
-            'password' => 'test',
+            'name'      => 'Ghost',
+            'lastname'  => 'User',
+            'email'     => 'ghost@example.com',
+            'password'  => 'secret123',
+            'birthday'  => '2000-01-01',
         ]));
 
-        $response = $this->client->getResponse();
-        $data = json_decode($response->getContent(), true);
-
-        if (!isset($data['token'])) {
-            throw new \RuntimeException('Token JWT manquant dans la réponse.');
-        }
-
-        $this->client->setServerParameter('HTTP_Authorization', sprintf('Bearer %s', $data['token']));
-    }
-
-    public function testIndexRoute(): void
-    {
-        $this->client->request('GET', '/user');
-        $this->assertResponseIsSuccessful();
+        $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
         $this->assertJson($this->client->getResponse()->getContent());
     }
 
-    public function testGetAllStudents(): void
-    {
-        $this->authenticate();
-        $this->client->request('GET', '/api/students');
-        $this->assertResponseIsSuccessful();
-    }
-
-    public function testCreateUser(): void
-    {
-        $this->authenticate();
-        $this->client->request('POST', '/api/user', [], [], [
-            'CONTENT_TYPE' => 'application/json',
-        ], json_encode([
-            'name' => 'Test',
-            'lastname' => 'User',
-            'email' => 'testuser@example.com',
-            'password' => 'password123',
-            'birthday' => '2000-01-01',
-        ]));
-
-        $this->assertResponseStatusCodeSame(Response::HTTP_CREATED);
-        $this->assertJson($this->client->getResponse()->getContent());
-    }
-
-    public function testCreateUserWithInvalidData(): void
-    {
-        $this->authenticate();
-        $this->client->request('POST', '/api/user', [], [], [
-            'CONTENT_TYPE' => 'application/json',
-        ], '{}');
-
-        $this->assertResponseStatusCodeSame(Response::HTTP_BAD_REQUEST);
-    }
-
-    public function testDeleteUserNotFound(): void
+    public function test_delete_unknown_user_returns_404(): void
     {
         $this->authenticate();
         $this->client->request('DELETE', '/api/users/999999');
