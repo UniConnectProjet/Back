@@ -8,22 +8,9 @@ on:
 
 jobs:
   test:
-    name: PHPUnit
+    name: tests
     runs-on: ubuntu-latest
 
-    services:
-      database:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: uniconnect_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s 
-          --health-timeout=5s 
-          --health-retries=3
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,7 +20,7 @@ jobs:
         with:
           php-version: '8.3'
           coverage: xdebug
-          extensions: intl, mbstring, pdo_mysql, xml, ctype, iconv
+          extensions: intl, mbstring, pdo_sqlite, xml, ctype, iconv
           tools: composer
 
       - name: Cache Composer
@@ -45,35 +32,31 @@ jobs:
 
       - name: Install Composer dependencies
         run: composer install --no-interaction --no-progress --prefer-dist --optimize-autoloader
-      
-      - name: Supprimer le schéma
-        env:
-          DATABASE_URL: mysql://root:root@127.0.0.1:3306/uniconnect_test
-        run: php bin/console doctrine:schema:drop --force --full-database --no-interaction
 
-      - name: Créer les tables avec Doctrine
-        env:
-          DATABASE_URL: mysql://root:root@127.0.0.1:3306/uniconnect_test
-        run: php bin/console doctrine:schema:update --force --no-interaction
-
-      - name: Wait for MySQL to be ready
-        run: |
-          sudo apt-get update && sudo apt-get install -y mysql-client
-          for i in {1..30}; do
-            mysqladmin ping -h mysql -uroot -proot && break
-            sleep 2
-          done
-
-      - name: Reconstruire les clés JWT
+      - name: Rebuild JWT keys
         run: |
           mkdir -p config/jwt
           echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d > config/jwt/private.pem
           echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d > config/jwt/public.pem
           chmod 600 config/jwt/private.pem config/jwt/public.pem
 
-      - name: Exécuter les tests (avec couverture Clover)
+      - name: Prepare SQLite database (test)
         env:
-          DATABASE_URL: mysql://root:root@127.0.0.1:3306/uniconnect
+          APP_ENV: test
+          DATABASE_URL: 'sqlite:///%kernel.project_dir%/var/test.db'
+        run: |
+          mkdir -p var
+          rm -f var/test.db
+          # Crée la DB et le schéma pour l'environnement de test
+          php bin/console doctrine:database:create --if-not-exists --env=test
+          # Utilise soit schema:create, soit tes migrations (décommente la ligne qui te convient)
+          php bin/console doctrine:schema:create --env=test
+          # php bin/console doctrine:migrations:migrate --no-interaction --env=test
+
+      - name: Run tests (with Clover coverage)
+        env:
+          APP_ENV: test
+          DATABASE_URL: 'sqlite:///%kernel.project_dir%/var/test.db'
           JWT_PASSPHRASE: ${{ secrets.JWT_PASSPHRASE }}
         run: |
           mkdir -p build/logs
@@ -91,7 +74,14 @@ jobs:
         with:
           php-version: '8.3'
           extensions: mbstring, pdo_mysql
-
+  deploy: 
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
