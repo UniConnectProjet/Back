@@ -3,32 +3,37 @@ name: Symfony Backend CI/CD
 on:
   push:
     branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    needs: phpunit
-    steps:
-      - uses: actions/checkout@v3
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: 8.2
-          extensions: mbstring, pdo, pdo_mysql
-          tools: composer
-      - name: Install dependencies
-        run: composer install --no-progress --no-interaction --prefer-dist
-
   phpunit:
+    name: PHPUnit + Sonar
     runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: app_test
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: mysql://root:root@mysql:3306/app_test?serverVersion=8.0
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
+      - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.3'
           coverage: pcov
-          extensions: intl, mbstring, pdo_sqlite
+          extensions: intl, mbstring, pdo_mysql
           tools: composer
 
       - name: Cache Composer
@@ -38,62 +43,65 @@ jobs:
           key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
           restore-keys: composer-${{ runner.os }}-
 
-      - name: Install dependencies
+      - name: Install Composer dependencies
         run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
+      - name: Wait for MySQL to be ready
+        run: |
+          sudo apt-get update && sudo apt-get install -y mysql-client
+          for i in {1..30}; do
+            mysqladmin ping -h mysql -uroot -proot && break
+            sleep 2
+          done
+
       - name: Prepare test database (MySQL)
-        env:
-          APP_ENV: test
-          DATABASE_URL: mysql://root:root@127.0.0.1:3306/app_test
         run: |
           php bin/console doctrine:database:create --env=test --if-not-exists
           php bin/console doctrine:migrations:migrate --no-interaction --env=test
-      - name: Run PHPUnit
+          # php bin/console doctrine:fixtures:load --no-interaction --env=test
+
+      - name: Run PHPUnit (coverage + junit)
+        run: |
+          mkdir -p coverage var
+          if [ -f bin/phpunit ]; then PHPUNIT=bin/phpunit; else PHPUNIT=vendor/bin/phpunit; fi
+          php $PHPUNIT --testdox --log-junit var/junit.xml --coverage-clover coverage/coverage.xml
+
+      - name: Run SonarQube Scanner
+        uses: SonarSource/sonarqube-scan-action@v1.1.0
+        with:
+          projectBaseDir: .
+          args: >
+            -Dsonar.sources=src
+            -Dsonar.tests=tests
+            -Dsonar.exclusions=var/**,vendor/**
+            -Dsonar.php.coverage.reportPaths=coverage/coverage.xml
+            -Dsonar.junit.reportPaths=var/junit.xml
         env:
-          APP_ENV: test
-          DATABASE_URL: mysql://root:root@127.0.0.1:3306/app_test
-        run: ./vendor/bin/phpunit --testdox --log-junit var/junit.xml --coverage-clover var/coverage.xml
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phpunit-reports
-          path: |
-            var/junit.xml
-            var/coverage.xml
-
-
-  deploy:
+  build:
+    name: Build & Deploy
     runs-on: ubuntu-latest
-    needs: build
+    needs: phpunit
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Login DockerHub
-        uses: docker/login-action@v3
+      - name: Setup PHP 8.3
+        uses: shivammathur/setup-php@v2
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql
 
-      # Build & push avec tags en dur selon la branche
-      - name: Build & push (main → prod/latest)
-        if: github.ref == 'refs/heads/main'
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build & Push image
         run: |
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          docker build -t inesbrm1/uniconnect-backend:prod -t inesbrm1/uniconnect-backend:latest -t inesbrm1/uniconnect-backend:${SHORT_SHA} .
-          docker push inesbrm1/uniconnect-backend:prod
-          docker push inesbrm1/uniconnect-backend:latest
-          docker push inesbrm1/uniconnect-backend:${SHORT_SHA}
-      - name: Build & push (dev → preprod/dev-latest)
-        if: github.ref == 'refs/heads/dev'
-        run: |
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          docker build -t inesbrm1/uniconnect-backend:preprod -t inesbrm1/uniconnect-backend:dev-latest -t inesbrm1/uniconnect-backend:${SHORT_SHA} .
-          docker push inesbrm1/uniconnect-backend:preprod
-          docker push inesbrm1/uniconnect-backend:dev-latest
-          docker push inesbrm1/uniconnect-backend:${SHORT_SHA}
-      # Déploiement avec tags explicites (pas de variables passées)
+          TAG=$([[ "${GITHUB_REF##*/}" == "main" ]] && echo "prod" || echo "preprod")
+          docker build -t inesbrm1/uniconnect-backend:$TAG .
+          docker push inesbrm1/uniconnect-backend:$TAG
+
       - name: Deploy PROD (main)
         if: github.ref == 'refs/heads/main'
         uses: appleboy/ssh-action@v0.1.0
@@ -106,6 +114,7 @@ jobs:
             cd /var/www
             docker pull inesbrm1/uniconnect-backend:prod
             docker compose up -d --no-deps --build backend
+
       - name: Deploy PREPROD (dev)
         if: github.ref == 'refs/heads/dev'
         uses: appleboy/ssh-action@v0.1.0
