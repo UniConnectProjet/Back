@@ -26,62 +26,17 @@ final class CourseSessionRepository extends ServiceEntityRepository
      *
      * @return CourseSession[]
      */
-    public function findByStudentClassBetween(Student $student, DateTimeInterface $from, DateTimeInterface $to): array
+    public function findByClasseAndRange(Classe $classe, \DateTimeInterface $from, \DateTimeInterface $to): array
     {
-        // 1) Récupération de la classe depuis Student (getClass|getGroup|getPromo)
-        $class = null;
-        foreach (['getClass', 'getGroup', 'getPromo', 'getClasse'] as $m) {
-            if (\method_exists($student, $m)) {
-                $class = $student->{$m}();
-                if ($class) break;
-            }
-        }
-        if (!$class) {
-            return [];
-        }
-
-        $em = $this->getEntityManager();
-
-        $courseMeta = $em->getClassMetadata(Course::class);
-        $candAssoc = null;
-        foreach (['class', 'group', 'promo', 'classe'] as $cand) {
-            if ($courseMeta->hasAssociation($cand)) {
-                $candAssoc = $cand;
-                break;
-            }
-        }
-
-        if ($candAssoc) {
-            $qb = $this->createQueryBuilder('s')
-                ->innerJoin('s.course', 'c')
-                ->andWhere('c.' . $candAssoc . ' = :class')
-                ->andWhere('s.startAt >= :from')
-                ->andWhere('s.endAt   <= :to')
-                ->setParameter('class', $class)
-                ->setParameter('from',  $from)
-                ->setParameter('to',    $to)
-                ->orderBy('s.startAt', 'ASC');
-
-            return $qb->getQuery()->getResult();
-        }
-
-        
-        $sessionMeta = $em->getClassMetadata(CourseSession::class);
-        foreach (['class', 'group', 'promo', 'classe'] as $cand) {
-            if ($sessionMeta->hasAssociation($cand)) {
-                $qb = $this->createQueryBuilder('s')
-                    ->andWhere('s.' . $cand . ' = :class')
-                    ->andWhere('s.startAt >= :from')
-                    ->andWhere('s.endAt   <= :to')
-                    ->setParameter('class', $class)
-                    ->setParameter('from',  $from)
-                    ->setParameter('to',    $to)
-                    ->orderBy('s.startAt', 'ASC');
-
-                return $qb->getQuery()->getResult();
-            }
-        }
-
-        return [];
+        return $this->createQueryBuilder('s')
+            ->andWhere('s.classe = :classe')
+            ->andWhere('s.startAt >= :from AND s.startAt <= :to')
+            ->setParameter('classe', $classe)
+            ->setParameter('from', $from)
+            ->setParameter('to', $to)
+            ->orderBy('s.startAt', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
+
 }
