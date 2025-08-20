@@ -36,31 +36,5 @@ final class SemesterController extends AbstractController
             [], 
             true
         );
-    }
-
-    #[Route('/{studentId}', name: 'semester.getOne', methods:['GET'])]
-    public function getSemesterByStudentId(
-        StudentRepository $studentRepo,
-        SerializerInterface $serializer,
-        int $studentId
-    ): JsonResponse
-    {
-        $student = $studentRepo->find($studentId);
-
-        if (!$student) {
-            return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
-        }
-
-        $semesters = $student->getSemesters(); // ici on accède à la relation
-
-        $jsonSemester = $serializer->serialize($semesters, 'json', ["groups" => "getAllSemesters"]);
-
-        return new JsonResponse(
-            $jsonSemester,
-            Response::HTTP_OK,
-            [],
-            true
-        );
-    }
-    
+    }    
 }

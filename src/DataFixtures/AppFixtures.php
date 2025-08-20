@@ -11,35 +11,41 @@ use App\Entity\Grade;
 use App\Entity\Level;
 use App\Entity\Semester;
 use App\Entity\Student;
+use App\Entity\CourseSession;
 use App\Entity\User;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Faker\Factory;
+use PhpParser\Node\Expr\Cast\Array_;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 class AppFixtures extends Fixture
 {
     private UserPasswordHasherInterface $passwordHasher;
+    private int $nbCategories;
+    private int $nbNiveaux;
+    private int $classesParCombo;
+    private int $studentsParClasse;
+    private \Faker\Generator $faker;
 
     public function __construct(UserPasswordHasherInterface $passwordHasher)
     {
         $this->passwordHasher = $passwordHasher;
     }
-
-    public function load(ObjectManager $manager): void
+    private function initParameters(bool $isLight): void
     {
-        $isLight = getenv('FIXTURE_MODE') === 'light';
-        $nbCategories = $isLight ? 2 : 8;
-        $nbNiveaux = $isLight ? 2 : 6;
-        $classesParCombo = $isLight ? 2 : 5;
-        $studentsParClasse = $isLight ? 10 : 30;
+        $this->nbCategories = $isLight ? 2 : 8;
+        $this->nbNiveaux = $isLight ? 2 : 6;
+        $this->classesParCombo = $isLight ? 2 : 5;
+        $this->studentsParClasse = $isLight ? 10 : 30;
+    }
 
-        $faker = Factory::create('fr_FR');
 
+    private function createLevels(ObjectManager $manager): array{
         // Niveaux d'études
         $niveaux = array_slice([
             'Bac+1', 'Bac+2', 'Bac+3', 'Bac+4', 'Bac+5', 'Doctorat'
-        ], 0, $nbNiveaux);
+        ], 0, $this->nbNiveaux);
 
         $levels = [];
         foreach ($niveaux as $nom) {
@@ -48,11 +54,13 @@ class AppFixtures extends Fixture
             $manager->persist($level);
             $levels[] = $level;
         }
-
+        return $levels;
+    }
+    private function createCategories(ObjectManager $manager, array $levels): array {
         // Catégories
         $categoryNames = array_slice([
             'Informatique', 'Chimie', 'Génie Civil', 'Biologie', 'Mathématiques', 'Electronique', 'Physique', 'Gestion'
-        ], 0, $nbCategories);
+        ], 0, $this->nbCategories);
 
         $categories = [];
         foreach ($categoryNames as $catName) {
@@ -64,31 +72,16 @@ class AppFixtures extends Fixture
             $manager->persist($category);
             $categories[] = $category;
         }
+        return $categories;
+    }
 
-        // Certaines filières aient moins de niveaux
-        /*foreach ($categoryNames as $catName) {
-            $category = new Category();
-            $category->setName($catName);
-
-            if ($catName === 'Biologie') {
-                $category->addLevelId($levels[0]); // Bac+1
-                $category->addLevelId($levels[1]); // Bac+2
-            } else {
-                foreach ($levels as $level) {
-                    $category->addLevelId($level);
-                }
-            }
-
-            $manager->persist($category);
-        }*/
-
-
+    private function createClasses(ObjectManager $manager, array $categories, array $levels): array { 
         // Classes
         $classes = [];
         $classesByCategory = [];
         foreach ($categories as $category) {
             foreach ($levels as $level) {
-                for ($i = 1; $i <= $classesParCombo; $i++) {
+                for ($i = 1; $i <= $this->classesParCombo; $i++) {
                     $classe = new Classe();
                     $classe->setName("{$category->getName()} - {$level->getName()} - Classe $i");
                     $classe->setCategory($category);
@@ -99,44 +92,80 @@ class AppFixtures extends Fixture
                 }
             }
         }
+        return $classes;
+    }
 
+    private function createSemesters(ObjectManager $manager): array {
         // Semestres
         $semesters = [];
         for ($i = 1; $i <= 2; $i++) {
             $semester = new Semester();
             $semester->setName("Semestre $i");
-            $semester->setStartDate($faker->dateTimeThisYear);
-            $semester->setEndDate($faker->dateTimeThisYear);
+            $semester->setStartDate($this->faker->dateTimeThisYear);
+            $semester->setEndDate($this->faker->dateTimeThisYear);
             $manager->persist($semester);
             $semesters[] = $semester;
         }
+        return $semesters;
+    }
 
-        // Users + Students
-        $students = [];
+    private function createUsers(ObjectManager $manager, array $classes, array $semesters): array
+    {
         $users = [];
-        foreach ($classes as $classe) {
-            for ($j = 0; $j < $studentsParClasse; $j++) {
-                $user = new User();
-                $user->setName($faker->firstName);
-                $user->setLastname($faker->lastName);
-                $user->setBirthday($faker->dateTimeBetween('-25 years', '-18 years'));
-                $user->setEmail($faker->unique()->safeEmail);
-                $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
-                $user->setRoles(['ROLE_USER']);
-                $manager->persist($user);
-
-                $student = new Student();
-                $student->setUser($user);
-                $student->setClasse($classe);
-                foreach ($semesters as $semester) {
-                    $student->addSemester($semester);
-                }
-                $manager->persist($student);
-                $users[] = $user;
-                $students[] = $student;
-            }
+        for ($j = 0; $j < $this->studentsParClasse; $j++) {
+            $user = new User();
+            $user->setName($this->faker->firstName());
+            $user->setLastname($this->faker->lastName());
+            $user->setBirthday($this->faker->dateTimeBetween('-25 years', '-18 years'));
+            $user->setEmail($this->faker->unique()->safeEmail());
+            $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
+            $user->setRoles(['ROLE_STUDENT']);
+            $manager->persist($user);
+            $users[] = $user;
         }
+        return $users;
+    }
 
+    private function createProfessors(ObjectManager $manager, int $count = 8): array
+    {
+        $profs = [];
+        for ($i = 1; $i <= $count; $i++) {
+            $user = new User();
+            $user->setName('Prof' . $i);
+            $user->setLastname($this->faker->lastName());
+            $user->setBirthday($this->faker->dateTimeBetween('-60 years', '-30 years'));
+            $user->setEmail(sprintf('prof%d@example.com', $i));
+            $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
+            // On met les deux pour compatibilité avec ton libellé “professor”
+            $user->setRoles(['ROLE_PROFESSOR']);
+            $manager->persist($user);
+            $profs[] = $user;
+        }
+        return $profs;
+    }
+
+
+    private function createStudents(ObjectManager $manager, array $classes, array $semesters, array $users): array
+    {
+        $students = [];
+        foreach ($users as $user) {
+            $student = new Student();
+            $student->setUser($user);
+
+            $classe = $classes[array_rand($classes)];
+            $student->setClasse($classe);
+
+            foreach ($semesters as $semester) {
+                $student->addSemester($semester);
+            }
+
+            $manager->persist($student);
+            $students[] = $student;
+        }
+        return $students;
+    }
+    
+    private function createCourses(ObjectManager $manager, array $categories, array $levels, array $semesters, array $classes): array { 
         // Courses par catégorie
         $courseParCategorie = [
             'Informatique' => [
@@ -187,7 +216,9 @@ class AppFixtures extends Fixture
 
         foreach ($courseParCategorie as $categorieNom => $ues) {
             $category = $categoryByName[$categorieNom] ?? null;
-            if (!$category) continue;
+            if (!$category) {
+                continue;
+            }
 
             foreach ($ues as $ueName => $moduleNames) {
                 $courseUnit = new CourseUnit();
@@ -220,36 +251,265 @@ class AppFixtures extends Fixture
                 }
             }
         }
+        return $courses;
+    }
 
-        // Grades
+    private function createGrades(ObjectManager $manager, array $students, array $courses): void
+    {
         foreach ($students as $student) {
-            foreach ($courses as $course) {
-                if ($course->getClassId()->contains($student->getClasse())) {
-                    $grade = new Grade();
-                    $grade->setStudent($student);
-                    $grade->setCourse($course);
-                    $grade->setTitle($faker->word);
-                    $grade->setGrade(mt_rand(10, 20));
-                    $grade->setDividor(mt_rand(10, 20));
-                    $manager->persist($grade);
+            $studentClasse = $student->getClasse();
+            
+            $eligible = array_filter($courses, function ($course) use ($studentClasse) {
+                // cas le plus courant: ManyToMany "classes"
+                if (method_exists($course, 'getClasses') && $course->getClasses() !== null) {
+                    return $course->getClasses()->contains($studentClasse);
+                }
+                if (method_exists($course, 'getClasse')) {
+                    $cl = $course->getClasse();
+                    if ($cl instanceof \Doctrine\Common\Collections\Collection) {
+                        return $cl->contains($studentClasse);
+                    }
+                    return $cl === $studentClasse;
+                }
+                return true;
+            });
+
+            $toPick = array_values($eligible);
+            shuffle($toPick);
+            $toPick = array_slice($toPick, 0, min(random_int(3, 6), count($toPick)));
+
+            foreach ($toPick as $course) {
+                $dividorChoices = [10, 16, 20, 20, 20];
+                $dividor = $dividorChoices[array_rand($dividorChoices)];
+                $grade   = random_int(0, $dividor);
+
+                $g = new Grade();
+                $g->setStudent($student);
+                $g->setCourse($course);
+                $g->setTitle($this->faker->randomElement(['TP', 'DS', 'Quiz', 'Projet']).' '.$this->faker->numberBetween(1, 3));
+                $g->setDividor($dividor);
+                $g->setGrade($grade);
+
+                $manager->persist($g);
+            }
+        }
+    }
+
+
+    private function createAbsences(ObjectManager $manager, array $students, array $semesters): void
+    {
+        // === Config souple ===
+        $tzName      = \date_default_timezone_get();
+        $minHour     = 8;    
+        $maxHour     = 19;   
+        $durations   = [60, 120]; 
+        $minSlots    = 1;     
+        $maxSlots    = 3;     
+        $minuteStep  = 60;   
+
+        $possibleMinutes = ($minuteStep >= 60)
+            ? [0]
+            : range(0, 59, max(1, min(59, $minuteStep)));
+
+        foreach ($students as $student) {
+            $day = $this->faker->dateTimeThisYear('now', $tzName);
+            $day->setTimezone(new \DateTimeZone($tzName));
+            $baseDay = (clone $day)->setTime(0, 0, 0);
+            $targetSlots = $this->faker->numberBetween($minSlots, $maxSlots);
+            $intervals = [];
+
+            $attempts = 0;
+            while (count($intervals) < $targetSlots && $attempts < 32) {
+                $attempts++;
+
+                $duration = $this->faker->randomElement($durations);
+                $lastStartHour = min($maxHour, 23 - intdiv($duration, 60));
+                if ($lastStartHour < $minHour) {
+                    break; // plage impossible avec cette durée
+                }
+
+                $startHour   = $this->faker->numberBetween($minHour, $lastStartHour);
+                $startMinute = $this->faker->randomElement($possibleMinutes);
+
+                $start = (clone $baseDay)->setTime($startHour, $startMinute, 0);
+                $end   = (clone $start)->modify("+{$duration} minutes");
+
+                if ($end->format('Y-m-d') !== $baseDay->format('Y-m-d')) {
+                    continue;
+                }
+
+                $overlap = false;
+                foreach ($intervals as [$s, $e]) {
+                    if ($start < $e && $end > $s) { $overlap = true; break; }
+                }
+                if ($overlap) continue;
+
+                $intervals[] = [$start, $end];
+            }
+
+            usort($intervals, fn($a, $b) => $a[0] <=> $b[0]);
+
+            foreach ($intervals as [$start, $end]) {
+                $absence = new Absence();
+                $absence->setStudent($student);
+                $absence->setStartedDate($start);
+                $absence->setEndedDate($end);
+
+                $justified = $this->faker->boolean();
+                $absence->setJustified($justified);
+                if ($justified) {
+                    $absence->setJustification($this->faker->sentence());
+                }
+
+                if (!empty($semesters)) {
+                    $semester = null;
+                    foreach ($semesters as $s) {
+                        if (method_exists($s, 'getStartDate') && method_exists($s, 'getEndDate')) {
+                            $sStart = $s->getStartDate();
+                            $sEnd   = $s->getEndDate();
+                            if ($sStart && $sEnd && $start >= $sStart && $end <= $sEnd) { $semester = $s; break; }
+                        }
+                    }
+                    $absence->setSemester($semester ?? $semesters[array_rand($semesters)]);
+                }
+
+                $manager->persist($absence);
+            }
+        }
+    }
+
+    // Utils
+    private function hasRole(User $u, string $role): bool {
+        return in_array($role, $u->getRoles() ?? [], true);
+    }
+
+    private function assignStudentsToClasses(ObjectManager $manager): void
+    {
+        $classeRepo   = $manager->getRepository(Classe::class);
+        $studentRepo  = $manager->getRepository(Student::class);
+        $userRepo     = $manager->getRepository(User::class);
+
+        /** @var Classe[] $classes */
+        $classes = $classeRepo->findAll();
+        if (!$classes) return;
+
+        /** @var User[] $users */
+        $users = $userRepo->findAll();
+        $studentsUsers = array_values(array_filter($users, fn(User $u) => $this->hasRole($u, 'ROLE_STUDENT')));
+
+        $i = 0;
+        foreach ($studentsUsers as $user) {
+            // réutilise Student existant si présent
+            $student = $studentRepo->findOneBy(['user' => $user]) ?? new Student();
+            $student->setUser($user);
+
+            // round-robin sur les classes
+            $classe = $classes[$i % count($classes)];
+            if (method_exists($student, 'setClasse')) {
+                $student->setClasse($classe);
+            }
+            $manager->persist($student);
+            $i++;
+        }
+    }
+
+    private function seedCourseSessions(ObjectManager $manager, array $courses, array $classes, array $users): void
+    {
+        if (!$courses || !$classes) return;
+
+        // profs si dispo, sinon n’importe quel user
+        $professors = array_values(array_filter($users, fn(User $u) => $this->hasRole($u, 'ROLE_PROF') || $this->hasRole($u, 'ROLE_PROFESSOR')));
+        if (!$professors) $professors = $users;
+
+        // créneaux types (durée en minutes)
+        $slots = [
+            ['h' => 8,  'm' => 0,  'dur' => 120], // 08:00–10:00
+            ['h' => 10, 'm' => 15, 'dur' => 120], // 10:15–12:15
+            ['h' => 14, 'm' => 0,  'dur' => 120], // 14:00–16:00
+            ['h' => 16, 'm' => 15, 'dur' => 120], // 16:15–18:15
+        ];
+
+        // helper pour choisir un cours compatible avec la classe (ManyToMany Course<->Classe), sinon fallback
+        $pickCourseForClasse = function(Classe $classe) use ($courses): Course {
+            $eligible = [];
+            foreach ($courses as $c) {
+                if (method_exists($c, 'getClasses') && $c->getClasses()?->contains($classe)) {
+                    $eligible[] = $c;
+                }
+            }
+            return ($eligible ? $eligible[array_rand($eligible)] : $courses[array_rand($courses)]);
+        };
+
+        // 2 séances demain pour 2 classes (test "NextDayCourses")
+        $tomorrow = (new \DateTimeImmutable('tomorrow'))->setTime(0, 0);
+        foreach (array_slice($classes, 0, min(2, count($classes))) as $classe) {
+            foreach (array_slice($slots, 0, 2) as $slot) {
+                $this->persistSession($manager, $pickCourseForClasse($classe), $classe, $professors, $tomorrow, $slot, 'B');
+            }
+        }
+
+        // semaine courante (lun→ven) : 2 séances / jour / classe (pour l’EDT hebdo)
+        $monday = (new \DateTimeImmutable('monday this week'))->setTime(0, 0);
+        for ($d = 0; $d < 5; $d++) {
+            $day = $monday->modify("+$d day");
+            foreach ($classes as $classe) {
+                foreach (array_slice($slots, 0, 2) as $slot) {
+                    $this->persistSession($manager, $pickCourseForClasse($classe), $classe, $professors, $day, $slot, 'A');
                 }
             }
         }
+    }
 
-        // Absences
-        foreach ($students as $student) {
-            $absence = new Absence();
-            $absence->setStudent($student);
-            $absence->setStartedDate($faker->dateTimeThisYear);
-            $absence->setEndedDate($faker->dateTimeThisYear);
-            $justified = $faker->boolean;
-            $absence->setJustified($justified);
-            if ($justified) {
-                $absence->setJustification($faker->sentence);
-            }
-            $absence->setSemester($semesters[array_rand($semesters)]);
-            $manager->persist($absence);
+    private function persistSession(
+        ObjectManager $manager,
+        Course $course,
+        Classe $classe,
+        array $professors,
+        \DateTimeImmutable $date,
+        array $slot,
+        string $roomPrefix
+    ): void {
+        $start = $date->setTime($slot['h'], $slot['m']);
+        $end   = $start->modify('+' . $slot['dur'] . ' minutes');
+        $prof  = $professors ? $professors[array_rand($professors)] : null;
+
+        $s = new CourseSession();
+        $s->setCourse($course);
+
+        // Classe : ManyToOne (setClasse) OU ManyToMany (addClasse) selon ton mapping
+        if (method_exists($s, 'setClasse')) {
+            $s->setClasse($classe);
+        } elseif (method_exists($s, 'addClasse')) {
+            $s->addClasse($classe);
         }
+
+        if ($prof && method_exists($s, 'setProfessor')) $s->setProfessor($prof);
+        if (method_exists($s, 'setRoom')) $s->setRoom($roomPrefix . random_int(100, 399));
+        $s->setStartAt($start);
+        $s->setEndAt($end);
+
+        $manager->persist($s);
+    }
+    
+    public function load(ObjectManager $manager): void
+    {
+        $this->faker = Factory::create('fr_FR');
+        $isLight = getenv('FIXTURE_MODE') === 'light';
+
+        $this->initParameters($isLight);
+
+        $levels = $this->createLevels($manager);
+        $categories = $this->createCategories($manager, $levels);
+        $classes = $this->createClasses($manager, $categories, $levels);
+        $semesters = $this->createSemesters($manager);
+        $users = $this->createUsers($manager, $classes, $semesters);
+        $this->createProfessors($manager);
+        $students = $this->createStudents($manager, $classes, $semesters, $users);
+        $courses = $this->createCourses($manager, $categories, $levels, $semesters, $classes);
+        $this->createGrades($manager, $students, $courses);
+        $this->createAbsences($manager, $students, $semesters);
+        $this->assignStudentsToClasses($manager);
+        $this->seedCourseSessions($manager, $courses, $classes, $users); 
 
         $manager->flush();
     }

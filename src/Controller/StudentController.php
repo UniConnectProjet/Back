@@ -2,32 +2,132 @@
 
 namespace App\Controller;
 
+use App\Entity\Classe;
 use App\Entity\Student;
-
+use App\Entity\User;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Repository\StudentRepository;
 use App\Repository\ClasseRepository;
+use App\Repository\GradeRepository;
 use App\Repository\UserRepository;
 use App\Repository\SemesterRepository;
+use App\Repository\AbsenceRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 
 use Symfony\Component\HttpFoundation\Request;
 
-#[Route('/api/students')]
+#[Route('/api')]
 class StudentController extends AbstractController
 {
-
+    private const ROUTE_FOR_A_STUDENT = '/api/students/{id}';
     private StudentRepository $repository;
     private SerializerInterface $serializer;
 
-    public function __construct(StudentRepository $repository, SerializerInterface $serializer)
+    public function __construct(
+        private StudentRepository $students,
+        private AbsenceRepository $absences,
+        private GradeRepository $grades,
+    ) {}
+
+    #[Route('/me/semesters/absences', name: 'api_me_semesters_absences', methods: ['GET'])]
+    public function meSemestersAbsences(): JsonResponse
     {
-        $this->repository = $repository;
-        $this->serializer = $serializer;
+        $user = $this->getUser();
+        $student = $this->students->findOneBy(['user' => $user]);
+        if (!$student) {
+            return $this->json(['message' => 'Not a student'], Response::HTTP_NOT_FOUND);
+        }
+
+        $blocks = $this->buildAbsenceBlocks($student->getId());
+        return $this->json($blocks, Response::HTTP_OK);
     }
+
+    /**
+     * Construit les "blocks" d'absences par semestre pour un étudiant.
+     * Retourne un ARRAY (pas de JsonResponse).
+     */
+    private function buildAbsenceBlocks(int $studentId): array
+    {
+        $student = $this->students->find($studentId);
+        if (!$student) {
+            return [];
+        }
+
+        $semesters = $student->getSemesters(); // Doctrine Collection|array
+        $blocks = [];
+
+        foreach ($semesters as $semester) {
+            $absences = $this->absences->findBy([
+                'student'  => $student,
+                'semester' => $semester,
+            ]);
+
+            $items = array_map(static function ($a) {
+                $start = method_exists($a, 'getStartedDate') ? $a->getStartedDate()
+                      : (method_exists($a, 'getStartedAt') ? $a->getStartedAt() : null);
+                $end   = method_exists($a, 'getEndedDate')   ? $a->getEndedDate()
+                      : (method_exists($a, 'getEndedAt')   ? $a->getEndedAt()   : null);
+
+                $justified = null;
+                if (method_exists($a, 'isJustified')) {
+                    $val = $a->isJustified();
+                    $justified = is_bool($val) ? $val : (($val === 0 || $val === 1) ? (bool)$val : null);
+                }
+
+                return [
+                    'id'            => $a->getId(),
+                    'startedDate'   => $start?->format(\DATE_ATOM),
+                    'endedDate'     => $end?->format(\DATE_ATOM),
+                    'justified'     => $justified,
+                    'justification' => method_exists($a, 'getJustification') ? $a->getJustification() : null,
+                ];
+            }, $absences);
+
+            $minutes = 0; $jMin = 0; $uMin = 0; $jCount = 0; $uCount = 0;
+            foreach ($items as $i) {
+                $s = !empty($i['startedDate']) ? new \DateTimeImmutable($i['startedDate']) : null;
+                $e = !empty($i['endedDate'])   ? new \DateTimeImmutable($i['endedDate'])   : null;
+                if ($s && $e) {
+                    $m = max(0, intdiv($e->getTimestamp() - $s->getTimestamp(), 60));
+                    $minutes += $m;
+                    if ($i['justified'] === true)  { $jMin += $m; $jCount++; }
+                    if ($i['justified'] === false) { $uMin += $m; $uCount++; }
+                }
+            }
+
+            $fmt = static fn(int $m) => sprintf('%dh%02d', intdiv(max(0,$m),60), max(0,$m)%60);
+
+            $blocks[] = [
+                'semester' => [
+                    'id'        => $semester->getId(),
+                    'name'      => method_exists($semester, 'getName') ? $semester->getName() : null,
+                    'startDate' => method_exists($semester, 'getStartDate') ? $semester->getStartDate()?->format('Y-m-d') : null,
+                    'endDate'   => method_exists($semester, 'getEndDate') ? $semester->getEndDate()?->format('Y-m-d') : null,
+                ],
+                'totals' => [
+                    'minutes'     => $minutes,
+                    'hhmm'        => $fmt($minutes),
+                    'justified'   => ['minutes' => $jMin, 'hhmm' => $fmt($jMin), 'count' => $jCount],
+                    'unjustified' => ['minutes' => $uMin, 'hhmm' => $fmt($uMin), 'count' => $uCount],
+                ],
+                'absences' => $items, 
+            ];
+        }
+        
+        usort($blocks, function ($a, $b) {
+            $ad = $a['semester']['startDate'] ?? null;
+            $bd = $b['semester']['startDate'] ?? null;
+            if ($ad && $bd) return strcmp($ad, $bd);
+            return ($a['semester']['id'] ?? 0) <=> ($b['semester']['id'] ?? 0);
+        });
+
+        return $blocks;
+    }
+
     #[Route('/student', name: 'app_student')]
     public function index(): JsonResponse
     {
@@ -38,7 +138,7 @@ class StudentController extends AbstractController
     }
 
 
-    #[Route('/', name: 'student.getAll', methods:['GET'])]
+    #[Route('/students', name: 'student.getAll', methods:['GET'])]
     public function getAllStudents(): JsonResponse
     {
         $student =  $this->repository->findAll();
@@ -50,36 +150,104 @@ class StudentController extends AbstractController
             true
         );
     }
-
-    #[Route('/{id}', name: 'student.getOne', methods:['GET'])]
-    public function getOneStudent(int $id): JsonResponse
+  
+    #[Route('/me/student', name: 'student.me', methods: ['GET'])]
+    public function getMyStudent(StudentRepository $repo): JsonResponse
     {
-        $student =  $this->repository->find($id);
-
-        if (!$student) {
-            return new JsonResponse(['error' => 'Student not found'], JsonResponse::HTTP_NOT_FOUND);
+        $user = $this->getUser();
+        if (!$user) {
+            return new JsonResponse(['message' => 'Unauthorized'], 401);
         }
 
-        $jsonStudent = $this->serializer->serialize($student, 'json', ["groups" => "getAllStudents"]);
-        return new JsonResponse($jsonStudent, JsonResponse::HTTP_OK, [], true);
-    }
+        $student = $repo->findOneBy(['user' => $user]);
+        if (!$student) {
+            return new JsonResponse(['message' => 'No student for this user'], 404);
+        }
 
-    #[Route('/grades/{id}', name: 'student.getGrades', methods:['GET'])]
-    public function getGradesByStudentId(
-        int $id
-        ): JsonResponse
+        return new JsonResponse([
+            'id'     => $student->getId(),
+            'classe' => $student->getClasse() ? [
+                'id'   => $student->getClasse()->getId(),
+                'name' => $student->getClasse()->getName(),
+            ] : null,
+        ], 200);
+    }
+    
+    #[Route('/me/grades', name: 'api_me_grades', methods: ['GET'])]
+    public function meGrades(): JsonResponse
     {
-        $student =  $this->repository->find($id);
-        $jsonStudent = $this->serializer->serialize($student, 'json',["groups" => "getStudentGrades"]);
-        return new JsonResponse(    
-            $jsonStudent,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+        $user = $this->getUser();
+        $student = $this->students->findOneBy(['user' => $user]);
+        if (!$student) {
+            return $this->json(['message' => 'Not a student'], 404);
+        }
+
+        $payload = $this->buildGradesPayload($student->getId());
+        return $this->json($payload);
     }
 
-    #[Route('/absences/{id}', name: 'student.getAbsences', methods:['GET'])]
+    private function buildGradesPayload(int $studentId): array
+    {
+        $student = $this->students->find($studentId);
+        if (!$student) {
+            return ['grades' => []];
+        }
+
+        $rows = $this->grades->findBy(['student' => $student]);
+
+        foreach ($rows as $g) {
+            $course = $g->getCourse();
+            $cid    = $course?->getId();
+
+            if ($cid === null) {
+                continue;
+            }
+
+            if (!isset($byCourse[$cid])) {
+                $byCourse[$cid] = [
+                    'name'  => method_exists($course, 'getName') ? $course->getName() : null,
+                    'sum20' => 0.0,
+                    'count' => 0,
+                ];
+            }
+
+            $grade   = $g->getGrade();
+            $dividor = $g->getDividor() ?: 0;
+
+            if ($grade !== null && $dividor > 0) {
+                $value20 = (float)$grade / (float)$dividor * 20.0;
+                $byCourse[$cid]['sum20'] += $value20;
+                $byCourse[$cid]['count']++;
+            }
+        }
+
+        $courseAvg20 = []; 
+        foreach ($byCourse as $cid => $acc) {
+            $courseAvg20[$cid] = $acc['count'] > 0
+                ? round($acc['sum20'] / $acc['count'], 2)
+                : null;
+        }
+
+        $grades = array_map(function ($g) use ($courseAvg20) {
+            $course = $g->getCourse();
+            $cid    = $course?->getId();
+
+            return [
+                'id'    => $g->getId(),
+                'grade' => $g->getGrade(),     
+                'divisor' => $g->getDividor(),   
+                'title' => $g->getTitle(),
+                'course' => [
+                    'id'      => $cid,
+                    'name'    => $course?->getName(),
+                    'average' => $cid !== null ? ($courseAvg20[$cid] ?? null) : null,
+                ],
+            ];
+        }, $rows);
+
+        return ['grades' => $grades];
+    }
+    #[Route('/student/{id}/absences', name: 'student.getAbsences', methods:['GET'])]
     public function getAbsencesByStudentId(
         int $id
         ): JsonResponse
@@ -94,63 +262,49 @@ class StudentController extends AbstractController
         );
     }
 
-    #[Route('/', name: 'student.add', methods:['POST'])]
+   #[Route('/student', name: 'student.add', methods:['POST'])]
     public function addStudent(
         Request $request,
         EntityManagerInterface $em,
         ClasseRepository $classeRepository,
         UserRepository $userRepository,
         SemesterRepository $semesterRepository
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $data = json_decode($request->getContent(), true);
-        
-        // Créer l'étudiant de base
+
         $student = new Student();
-        
-        // Gérer la relation avec la classe
-        if (isset($data['classe']['id'])) {
-            $classe = $classeRepository->find($data['classe']['id']);
-            if (!$classe) {
-                return new JsonResponse(['error' => 'Classe not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
-            $student->setClasse($classe);
-        } else {
-            return new JsonResponse(['error' => 'Classe is required'], JsonResponse::HTTP_BAD_REQUEST);
+
+        // Classe
+        $classe = $this->getClasseFromData($data, $classeRepository);
+        if (!$classe) {
+            return new JsonResponse(['error' => 'Classe not found or missing'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        
-        // Gérer la relation avec l'utilisateur
-        if (isset($data['user']['id'])) {
-            $user = $userRepository->find($data['user']['id']);
-            if (!$user) {
-                return new JsonResponse(['error' => 'User not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
-            $student->setUser($user);
-        } else {
-            return new JsonResponse(['error' => 'User is required'], JsonResponse::HTTP_BAD_REQUEST);
+        $student->setClasse($classe);
+
+        // User
+        $user = $this->getUserFromData($data, $userRepository);
+        if (!$user) {
+            return new JsonResponse(['error' => 'User not found or missing'], JsonResponse::HTTP_BAD_REQUEST);
         }
-        
-        // Gérer la relation avec les semestres
-        if (isset($data['semesters']) && is_array($data['semesters'])) {
-            foreach ($data['semesters'] as $semesterData) {
-                if (isset($semesterData['id'])) {
-                    $semester = $semesterRepository->find($semesterData['id']);
-                    if ($semester) {
-                        $student->addSemester($semester);
-                    }
-                }
-            }
+        $student->setUser($user);
+
+        // Semesters
+        $semesters = $this->getSemestersFromData($data, $semesterRepository);
+        foreach ($semesters as $semester) {
+            $student->addSemester($semester);
         }
-        
+
         $em->persist($student);
         $em->flush();
+
         return new JsonResponse(
             ['message' => 'Student added successfully', 'id' => $student->getId()],
             JsonResponse::HTTP_CREATED
         );
     }
 
-    #[Route('/{id}', name: 'student.update', methods:['PUT'])]
+
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.update', methods:['PUT'])]
     public function updateStudent(
         Request $request,
         EntityManagerInterface $em,
@@ -158,61 +312,53 @@ class StudentController extends AbstractController
         UserRepository $userRepository,
         SemesterRepository $semesterRepository,
         int $id
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $student = $this->repository->find($id);
-        
+
         if (!$student) {
             return new JsonResponse(['error' => 'Student not found'], JsonResponse::HTTP_NOT_FOUND);
         }
-        
+
         $data = json_decode($request->getContent(), true);
-        
-        // Mettre à jour la relation avec la classe
-        if (isset($data['classe']['id'])) {
-            $classe = $classeRepository->find($data['classe']['id']);
-            if (!$classe) {
-                return new JsonResponse(['error' => 'Classe not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
+
+        // Classe
+        $classe = $this->getClasseFromData($data, $classeRepository);
+        if (isset($data['classe']['id']) && !$classe) {
+            return new JsonResponse(['error' => 'Classe not found'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        if ($classe) {
             $student->setClasse($classe);
         }
-        
-        // Mettre à jour la relation avec l'utilisateur
-        if (isset($data['user']['id'])) {
-            $user = $userRepository->find($data['user']['id']);
-            if (!$user) {
-                return new JsonResponse(['error' => 'User not found'], JsonResponse::HTTP_BAD_REQUEST);
-            }
+
+        // User
+        $user = $this->getUserFromData($data, $userRepository);
+        if (isset($data['user']['id']) && !$user) {
+            return new JsonResponse(['error' => 'User not found'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+        if ($user) {
             $student->setUser($user);
         }
-        
-        // Mettre à jour la relation avec les semestres
+
+        // Semesters
         if (isset($data['semesters']) && is_array($data['semesters'])) {
-            // Supprimer tous les semestres actuels
             foreach ($student->getSemesters() as $semester) {
                 $student->removeSemester($semester);
             }
-            
-            // Ajouter les nouveaux semestres
-            foreach ($data['semesters'] as $semesterData) {
-                if (isset($semesterData['id'])) {
-                    $semester = $semesterRepository->find($semesterData['id']);
-                    if ($semester) {
-                        $student->addSemester($semester);
-                    }
-                }
+
+            foreach ($this->getSemestersFromData($data, $semesterRepository) as $semester) {
+                $student->addSemester($semester);
             }
         }
-        
+
         $em->flush();
-        
+
         return new JsonResponse(
             ['message' => 'Student updated successfully', 'id' => $student->getId()],
             JsonResponse::HTTP_OK
         );
     }
 
-    #[Route('/{id}', name: 'student.delete', methods:['DELETE'])]
+    #[Route(self::ROUTE_FOR_A_STUDENT, name: 'student.delete', methods:['DELETE'])]
     public function deleteStudent(
         EntityManagerInterface $em,
         int $id
@@ -227,6 +373,42 @@ class StudentController extends AbstractController
             [],
             true
         );
+    }
+
+    private function getClasseFromData(array $data, ClasseRepository $classeRepository) : ?Classe
+    {
+        if (!isset($data['classe']['id'])) {
+            return null;
+        }
+
+        return $classeRepository->find($data['classe']['id']);
+    }
+
+    private function getUserFromData(array $data, UserRepository $userRepository): ?User
+    {
+        if (!isset($data['user']['id'])) {
+            return null;
+        }
+
+        return $userRepository->find($data['user']['id']);
+    }
+
+    private function getSemestersFromData(array $data, SemesterRepository $semesterRepository): array
+    {
+        $semesters = [];
+
+        if (isset($data['semesters']) && is_array($data['semesters'])) {
+            foreach ($data['semesters'] as $semesterData) {
+                if (isset($semesterData['id'])) {
+                    $semester = $semesterRepository->find($semesterData['id']);
+                    if ($semester) {
+                        $semesters[] = $semester;
+                    }
+                }
+            }
+        }
+
+        return $semesters;
     }
 
 }

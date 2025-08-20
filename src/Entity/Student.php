@@ -27,7 +27,7 @@ class Student
      * @var Collection<int, Absence>
      */
     #[ORM\OneToMany(targetEntity: Absence::class, mappedBy: 'student')]
-    #[Groups(['getAllStudents', 'getStudentAbsences'])]
+    #[Groups(['getAllStudents', 'getStudentAbsences','getStudentAbsences'])]
     private Collection $absences;
 
     #[ORM\ManyToOne(inversedBy: 'students')]

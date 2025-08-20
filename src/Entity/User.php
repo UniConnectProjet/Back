@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\UserRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
@@ -31,7 +33,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeInterface $birthday = null;
 
     #[ORM\Column(length: 180)]
-    #[Groups(['getAllSemesters', 'getAllStudents', 'getAllUsers', 'getUser'])]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser'])]
     private ?string $email = null;
 
     /**
@@ -48,6 +50,17 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
     private ?Student $student = null;
+
+    /**
+     * @var Collection<int, CourseSession>
+     */
+    #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'professor')]
+    private Collection $courseSessions;
+
+    public function __construct()
+    {
+        $this->courseSessions = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -178,6 +191,36 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         }
 
         $this->student = $student;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, CourseSession>
+     */
+    public function getCourseSessions(): Collection
+    {
+        return $this->courseSessions;
+    }
+
+    public function addCourseSession(CourseSession $s): static
+    {
+        if (!$this->courseSessions->contains($s)) {
+            $this->courseSessions->add($s);
+            $s->setProfessor($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourseSession(CourseSession $s): static
+    {
+        if ($this->courseSessions->removeElement($s)) {
+            // set the owning side to null (unless already changed)
+            if ($s->getProfessor() === $this) {
+                $s->setProfessor(null);
+            }
+        }
 
         return $this;
     }

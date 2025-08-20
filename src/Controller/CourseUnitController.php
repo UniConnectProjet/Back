@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[Route('/api/course/units')]
 class CourseUnitController extends AbstractController
 {
+    private const ERROR_COURSE_UNIT_NOT_FOUND = 'Course Unit not found';
     /**
      * Page d'accueil du contrôleur.
      * 
@@ -75,7 +76,7 @@ class CourseUnitController extends AbstractController
         $courseUnit = $repository->find($courseUnitId);
 
         if (!$courseUnit) {
-            return new JsonResponse(['error' => 'Course Unit not found'], JsonResponse::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => self::ERROR_COURSE_UNIT_NOT_FOUND], JsonResponse::HTTP_NOT_FOUND);
         }
 
         $jsonCourseUnit = $serializer->serialize($courseUnit, 'json', ["groups" => "getAllCourseUnits"]);
@@ -108,7 +109,7 @@ class CourseUnitController extends AbstractController
         $courseUnit = $repository->find($courseUnitId);
 
         if (!$courseUnit) {
-            return new JsonResponse(['error' => 'Course Unit not found'], JsonResponse::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => self::ERROR_COURSE_UNIT_NOT_FOUND], JsonResponse::HTTP_NOT_FOUND);
         }
 
         $modules = $courseUnit->getCourses(); // Suppose que l'entité CourseUnit a une relation "courses"
@@ -174,7 +175,7 @@ class CourseUnitController extends AbstractController
         // Récupérer l'UE
         $courseUnit = $courseUnitRepository->find($courseUnitId);
         if (!$courseUnit) {
-            return new JsonResponse(['error' => 'Course Unit not found'], JsonResponse::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => self::ERROR_COURSE_UNIT_NOT_FOUND], JsonResponse::HTTP_NOT_FOUND);
         }
 
         // Récupérer le module
@@ -215,7 +216,7 @@ class CourseUnitController extends AbstractController
         // Récupérer l'UE
         $courseUnit = $courseUnitRepository->find($courseUnitId);
         if (!$courseUnit) {
-            return new JsonResponse(['error' => 'Course Unit not found'], JsonResponse::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => self::ERROR_COURSE_UNIT_NOT_FOUND], JsonResponse::HTTP_NOT_FOUND);
         }
 
         // Récupérer le module
@@ -256,7 +257,7 @@ class CourseUnitController extends AbstractController
         // Récupérer l'UE
         $courseUnit = $courseUnitRepository->find($courseUnitId);
         if (!$courseUnit) {
-            return new JsonResponse(['error' => 'Course Unit not found'], JsonResponse::HTTP_NOT_FOUND);
+            return new JsonResponse(['error' => self::ERROR_COURSE_UNIT_NOT_FOUND], JsonResponse::HTTP_NOT_FOUND);
         }
 
         // Récupérer les modules associés à l'UE
