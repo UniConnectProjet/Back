@@ -24,5 +24,11 @@ services:
         arguments: ['@Prometheus\CollectorRegistry']
         tags: ['kernel.event_subscriber']
     
-    Doctrine\Common\DataFixtures\Loader: '@doctrine.fixtures.loader'
+    when@dev:
+    services:
+        Doctrine\Common\DataFixtures\Loader: '@doctrine.fixtures.loader'
+    when@test:
+        services:
+            Doctrine\Common\DataFixtures\Loader: '@doctrine.fixtures.loader'
+
 
