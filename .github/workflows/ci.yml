@@ -8,59 +8,65 @@ on:
 
 jobs:
   test:
-    name: tests
+    name: PHPUnit
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: app_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s --health-timeout=5s --health-retries=20
+
+    env:
+      APP_ENV: test
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/app_test?serverVersion=8.0"
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup PHP 8.3
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          coverage: xdebug
-          extensions: intl, mbstring, pdo_sqlite, xml, ctype, iconv
+          coverage: pcov
+          extensions: intl, mbstring, pdo_mysql
           tools: composer
 
       - name: Cache Composer
         uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
-          key: composer-${{ hashFiles('**/composer.lock') }}
-          restore-keys: composer-
+          path: ~/.composer/cache/files
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
 
       - name: Install Composer dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist --optimize-autoloader
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
 
-      - name: Rebuild JWT keys
+      - name: Wait for MySQL
         run: |
-          mkdir -p config/jwt
-          echo "${{ secrets.JWT_PRIVATE_KEY }}" | base64 -d > config/jwt/private.pem
-          echo "${{ secrets.JWT_PUBLIC_KEY }}" | base64 -d > config/jwt/public.pem
-          chmod 600 config/jwt/private.pem config/jwt/public.pem
+          sudo apt-get update && sudo apt-get install -y mysql-client
+          for i in {1..30}; do
+            mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot && break
+            sleep 2
+          done
 
-      - name: Prepare SQLite database (test)
-        env:
-          APP_ENV: test
-          DATABASE_URL: 'sqlite:///%kernel.project_dir%/var/test.db'
+      - name: Prepare test database (MySQL)
         run: |
-          mkdir -p var
-          rm -f var/test.db
-          # Crée la DB et le schéma pour l'environnement de test
-          php bin/console doctrine:database:create --if-not-exists --env=test
-          # Utilise soit schema:create, soit tes migrations (décommente la ligne qui te convient)
-          php bin/console doctrine:schema:create --env=test
-          # php bin/console doctrine:migrations:migrate --no-interaction --env=test
+          php bin/console doctrine:database:create --env=test --if-not-exists
+          php bin/console doctrine:migrations:migrate --no-interaction --env=test
+          # php bin/console doctrine:fixtures:load --no-interaction --env=test
 
-      - name: Run tests (with Clover coverage)
-        env:
-          APP_ENV: test
-          DATABASE_URL: 'sqlite:///%kernel.project_dir%/var/test.db'
-          JWT_PASSPHRASE: ${{ secrets.JWT_PASSPHRASE }}
+      - name: Run PHPUnit (coverage + junit)
         run: |
-          mkdir -p build/logs
-          php vendor/bin/phpunit --coverage-clover build/logs/clover.xml
+          mkdir -p coverage var
+          if [ -f bin/phpunit ]; then PHPUNIT=bin/phpunit; else PHPUNIT=vendor/bin/phpunit; fi
+          php $PHPUNIT --testdox --log-junit var/junit.xml --coverage-clover coverage/coverage.xml
 
   build:
     name: Build & Deploy
@@ -81,7 +87,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
+
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
