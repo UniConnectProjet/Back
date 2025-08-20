@@ -48,7 +48,7 @@ jobs:
       
       - name: Supprimer le schéma
         env:
-          DATABASE_URL: mysql://root:root@127.0.0.1:3306/greenquest_test
+          DATABASE_URL: mysql://root:root@127.0.0.1:3306/uniconnect_test
         run: php bin/console doctrine:schema:drop --force --full-database --no-interaction
 
       - name: Créer les tables avec Doctrine
