@@ -198,53 +198,59 @@ class StudentController extends AbstractController
             return ['grades' => []];
         }
 
-        $rows = $this->grades->findBy(['student' => $student]);
+        $rows = $this->grades->createQueryBuilder('g')
+            ->select('
+                g.id         AS id,
+                g.title      AS title,
+                g.grade      AS grade,
+                g.dividor    AS dividor,
+                c.id         AS course_id,
+                c.name       AS course_name,
+                c.average    AS course_average
+            ')
+            ->innerJoin('g.course', 'c')
+            ->andWhere('g.student = :sid')
+            ->setParameter('sid', $studentId)
+            ->orderBy('c.name', 'ASC')
+            ->addOrderBy('g.title', 'ASC')
+            ->getQuery()
+            ->getArrayResult();
 
-        foreach ($rows as $g) {
-            $course = $g->getCourse();
-            $cid    = $course?->getId();
-
+        $byCourse = [];
+        foreach ($rows as $r) {
+            $cid = $r['course_id'] ?? null;
             if ($cid === null) {
                 continue;
             }
-
             if (!isset($byCourse[$cid])) {
-                $byCourse[$cid] = [
-                    'name'  => method_exists($course, 'getName') ? $course->getName() : null,
-                    'sum20' => 0.0,
-                    'count' => 0,
-                ];
+                $byCourse[$cid] = ['sum20' => 0.0, 'count' => 0];
             }
-
-            $grade   = $g->getGrade();
-            $dividor = $g->getDividor() ?: 0;
-
+            $grade   = $r['grade'];
+            $dividor = (int)($r['dividor'] ?? 0);
             if ($grade !== null && $dividor > 0) {
-                $value20 = (float)$grade / (float)$dividor * 20.0;
+                $value20 = (float)$grade / $dividor * 20.0;
                 $byCourse[$cid]['sum20'] += $value20;
                 $byCourse[$cid]['count']++;
             }
         }
 
-        $courseAvg20 = []; 
+        $courseAvg20 = [];
         foreach ($byCourse as $cid => $acc) {
             $courseAvg20[$cid] = $acc['count'] > 0
                 ? round($acc['sum20'] / $acc['count'], 2)
                 : null;
         }
 
-        $grades = array_map(function ($g) use ($courseAvg20) {
-            $course = $g->getCourse();
-            $cid    = $course?->getId();
-
+        $grades = array_map(function (array $r) use ($courseAvg20) {
+            $cid = $r['course_id'] ?? null;
             return [
-                'id'    => $g->getId(),
-                'grade' => $g->getGrade(),     
-                'divisor' => $g->getDividor(),   
-                'title' => $g->getTitle(),
-                'course' => [
-                    'id'      => $cid,
-                    'name'    => $course?->getName(),
+                'id'      => (int)$r['id'],
+                'grade'   => $r['grade'] !== null ? (float)$r['grade'] : null,
+                'dividor' => $r['dividor'] !== null ? (int)$r['dividor'] : null,
+                'title'   => $r['title'],
+                'course'  => [
+                    'id'      => $cid !== null ? (int)$cid : null,
+                    'name'    => $r['course_name'] ?? null,
                     'average' => $cid !== null ? ($courseAvg20[$cid] ?? null) : null,
                 ],
             ];
@@ -252,6 +258,7 @@ class StudentController extends AbstractController
 
         return ['grades' => $grades];
     }
+
     #[Route('/student/{id}/absences', name: 'student.getAbsences', methods:['GET'])]
     public function getAbsencesByStudentId(int $id): JsonResponse
     {
