@@ -1,38 +1,40 @@
-# ---- Construction base PHP ----
-FROM php:8.2-fpm-alpine AS base
+# --- stage build: installe les vendors ---
+FROM composer:2 AS vendor
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --prefer-dist --no-interaction --no-scripts
+COPY . .
+RUN composer dump-autoload --optimize --classmap-authoritative
 
-RUN apk add --no-cache \
-    bash git unzip icu-dev oniguruma-dev libzip-dev \
-    && docker-php-ext-install intl opcache pdo pdo_mysql zip
+# --- stage runtime: FPM ---
+FROM php:8.3-fpm
 
-# Installer Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Créer utilisateur symfony
-RUN addgroup -g 1000 symfony && adduser -G symfony -g symfony -s /bin/sh -D symfony
-
-WORKDIR /var/www/html
-
-# ---- Builder ----
-FROM base AS build
-
-COPY --chown=symfony:symfony . .
-
-RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress
-
-# ---- Runtime ----
-FROM base AS runtime
+# Dépendances système nécessaires aux extensions
+RUN apt-get update && apt-get install -y \
+    libicu-dev libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install intl pdo pdo_mysql zip gd opcache \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html
 
-COPY --from=build /var/www/html /var/www/html
+# Copie code + vendors (depuis le stage vendor)
+COPY --from=vendor /app /var/www/html
 
-# Préparer dossier JWT (les clés seront montées au runtime)
-RUN mkdir -p /etc/jwt && chown symfony:symfony /etc/jwt
+# Cache Symfony prod
+ENV APP_ENV=prod
+RUN php bin/console cache:clear --env=prod --no-warmup \
+ && php bin/console cache:warmup --env=prod \
+ && chown -R www-data:www-data var
 
-# Droits pour symfony
-RUN chown -R symfony:symfony /var/www/html
+# Opcache prod (mini réglages)
+RUN { \
+      echo "opcache.enable=1"; \
+      echo "opcache.preload=/var/www/html/config/preload.php"; \
+      echo "opcache.preload_user=www-data"; \
+      echo "opcache.validate_timestamps=0"; \
+    } > /usr/local/etc/php/conf.d/opcache.ini
 
-USER symfony
-
-CMD ["php-fpm"]
+# Le pool FPM écoute par défaut sur 9000 (TCP). Expose pour Nginx interne.
+EXPOSE 9000
+CMD ["php-fpm", "-F"]
