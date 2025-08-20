@@ -1,34 +1,41 @@
-# Utilise PHP 8.2 avec FPM
-FROM php:8.2-fpm
+FROM composer:2 AS vendor
+WORKDIR /app
 
-# Installer les dépendances nécessaires pour MySQL
+# Copier uniquement les fichiers de dépendances pour profiter du cache Docker
+COPY composer.json composer.lock ./
+# Installe les vendors (prod)
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+# Copier le reste du code (pour éventuellement générer l'autoload optimisé)
+COPY . .
+RUN composer dump-autoload --optimize --classmap-authoritative
+
+FROM php:8.3-FPM
+
 RUN apt-get update && apt-get install -y \
-    git unzip libzip-dev curl zip \
-    && docker-php-ext-install pdo_mysql zip opcache
+    git unzip libzip-dev curl zip libicu-dev \
+  && docker-php-ext-install pdo_mysql zip opcache \
+  && docker-php-ext-configure intl \
+  && docker-php-ext-install intl \
+  && rm -rf /var/lib/apt/lists/*
 
-# Installer Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
-# Créer un utilisateur non-root
+# Créer l’utilisateur applicatif
 RUN useradd -m -u 1000 symfony
 
-# Définir le dossier de travail
 WORKDIR /var/www/html
 
-# Créer les dossiers nécessaires (var/cache et var/log)
-RUN mkdir -p var/cache var/log && chown -R symfony:symfony var && chmod -R 775 var && chmod -R 777 var/cache var/log
+# Copier le code + vendors depuis le stage builder
+COPY --from=vendor /app /var/www/html
 
-# Copier les fichiers de l'application
-COPY . .
+# Préparer les dossiers var/
+RUN mkdir -p var/cache var/log \
+ && chown -R symfony:symfony var \
+ && chmod -R 775 var \
+ && chmod -R 777 var/cache var/log
 
-# Donner les droits au bon utilisateur pour le dossier entier
-RUN chown -R symfony:symfony /var/www/html
+# Variables d'env prod (ajuste selon ton besoin)
+ENV APP_ENV=prod \
+    APP_DEBUG=0
 
-# Fixer les permissions sur les dossiers de cache et log
-RUN chmod -R 775 var && chmod -R 777 var/cache var/log
-
-# Définir l'utilisateur par défaut
 USER symfony
-
-# Lancer le serveur PHP natif en exposant le dossier public
 CMD ["php-fpm"]
