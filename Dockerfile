@@ -11,7 +11,6 @@ COPY . .
 RUN composer dump-autoload --optimize --classmap-authoritative
 
 FROM php:8.3-fpm
-
 RUN apt-get update && apt-get install -y \
     git unzip libzip-dev curl zip libicu-dev \
   && docker-php-ext-install pdo_mysql zip opcache \
@@ -19,10 +18,11 @@ RUN apt-get update && apt-get install -y \
   && docker-php-ext-install intl \
   && rm -rf /var/lib/apt/lists/*
 
-# Créer l’utilisateur applicatif
-RUN useradd -m -u 1000 symfony
-
 WORKDIR /var/www/html
+
+# Copier les clés générées dans ton repo (ex: config/jwt)
+COPY --chown=symfony:symfony config/jwt /etc/jwt
+RUN chmod 640 /etc/jwt/*.pem
 
 # Copier le code + vendors depuis le stage builder
 COPY --from=vendor /app /var/www/html
