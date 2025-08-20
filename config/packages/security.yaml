@@ -6,7 +6,7 @@ security:
     app_user_provider:
       entity:
         class: App\Entity\User
-        property: email   
+        property: email
 
   firewalls:
     dev:
@@ -14,22 +14,21 @@ security:
       security: false
 
     login:
-      pattern: ^/api/login      
+      pattern: ^/api/login
       stateless: true
       provider: app_user_provider
       json_login:
         check_path: /api/login_check
-        username_path: username      
+        username_path: email
         password_path: password
         success_handler: lexik_jwt_authentication.handler.authentication_success
         failure_handler: lexik_jwt_authentication.handler.authentication_failure
-
 
     api:
       pattern: ^/api
       stateless: true
       provider: app_user_provider
-      jwt: ~                         
+      jwt: ~
 
   access_control:
     - { path: ^/api/login_check$,  roles: PUBLIC_ACCESS }
