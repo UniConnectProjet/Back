@@ -28,10 +28,15 @@ class StudentController extends AbstractController
     private SerializerInterface $serializer;
 
     public function __construct(
-        private StudentRepository $students,
-        private AbsenceRepository $absences,
-        private GradeRepository $grades,
-    ) {}
+    private StudentRepository $students,
+    private AbsenceRepository $absences,
+    private GradeRepository $grades,
+    SerializerInterface $serializer
+    ) {
+        $this->repository  = $students;    
+        $this->serializer  = $serializer;   
+    }
+
 
     #[Route('/me/semesters/absences', name: 'api_me_semesters_absences', methods: ['GET'])]
     public function meSemestersAbsences(): JsonResponse
@@ -248,18 +253,19 @@ class StudentController extends AbstractController
         return ['grades' => $grades];
     }
     #[Route('/student/{id}/absences', name: 'student.getAbsences', methods:['GET'])]
-    public function getAbsencesByStudentId(
-        int $id
-        ): JsonResponse
+    public function getAbsencesByStudentId(int $id): JsonResponse
     {
-        $student =  $this->repository->find($id);
-        $jsonStudent = $this->serializer->serialize($student, 'json',["groups" => "getStudentAbsences"]);
-        return new JsonResponse(    
-            $jsonStudent,
-            JsonResponse::HTTP_OK, 
-            [], 
-            true
-        );
+        $student = $this->repository->find($id);
+        if (!$student) {
+            return $this->json(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $absences = method_exists($student, 'getAbsences')
+            ? $student->getAbsences()->toArray()
+            : [];
+
+        $json = $this->serializer->serialize($absences, 'json', ['groups' => 'getStudentAbsences']);
+        return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
    #[Route('/student', name: 'student.add', methods:['POST'])]
@@ -271,6 +277,14 @@ class StudentController extends AbstractController
         SemesterRepository $semesterRepository
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
+        
+        if (!$data) {
+            return new JsonResponse(['error' => 'Invalid JSON'], JsonResponse::HTTP_BAD_REQUEST);
+        }
+
+        if(!isset($data['classe']) || !isset($data['user']) || !isset($data['semesters'])) {
+            return new JsonResponse(['error' => 'Missing required fields'], JsonResponse::HTTP_BAD_REQUEST);
+        }  
 
         $student = new Student();
 

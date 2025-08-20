@@ -49,6 +49,10 @@ class ClasseController extends AbstractController
         ): JsonResponse
     {
         $classe =  $repository->find($classeId);
+
+        if (!$classe) {
+            return new JsonResponse(null, Response::HTTP_NOT_FOUND);
+        }
         $jsonClasse = $serializer->serialize($classe, 'json',["groups" => "getStudentsByClassId"]);
         return new JsonResponse(    
             $jsonClasse,
@@ -58,26 +62,23 @@ class ClasseController extends AbstractController
         );
     }
 
-    #[Route('/{classId}/students/{studentId}', name: 'class.addStudent', methods:['POST'])]
-    public function addStudentToClass(
-        int $classId,
-        int $studentId,
-        EntityManagerInterface $em
-    ): JsonResponse {
+    #[Route('/{classId}/students/{studentId}', name: 'classes.add_student', methods: ['POST'])]
+    public function addStudent(int $classId, int $studentId, EntityManagerInterface $em): Response
+    {
         $class = $em->getRepository(Classe::class)->find($classId);
         if (!$class) {
-            return new JsonResponse(['error' => 'Class not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(null, Response::HTTP_NOT_FOUND);
         }
 
         $student = $em->getRepository(Student::class)->find($studentId);
         if (!$student) {
-            return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
+            return new JsonResponse(null, Response::HTTP_NOT_FOUND);
         }
 
         $class->addStudent($student);
-        $em->persist($class);
         $em->flush();
 
-        return new JsonResponse(['message' => 'Student added to class successfully'], JsonResponse::HTTP_OK);
+        // ✅ 204 No Content, SANS body
+        return new Response(null, Response::HTTP_NO_CONTENT);
     }
 }

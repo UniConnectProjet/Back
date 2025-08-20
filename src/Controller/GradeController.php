@@ -82,16 +82,15 @@ class GradeController extends AbstractController
         GradeRepository $repository,
         SerializerInterface $serializer,
         int $semesterId
-        ): JsonResponse
-    {
-        $grade =  $repository->findBy(['semester' => $semesterId]);
-        $jsonGrade = $serializer->serialize($grade, 'json',["groups" => "getAllGrades"]);
-        return new JsonResponse(    
-            $jsonGrade,
-            Response::HTTP_OK, 
-            [], 
-            true
-        );
+    ): JsonResponse {
+        $grades = $repository->findBySemesterId($semesterId);
+
+        if (!$grades) {
+            return new JsonResponse(null, Response::HTTP_NOT_FOUND);
+        }
+
+        $json = $serializer->serialize($grades, 'json', ['groups' => 'getAllGrades']);
+        return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
     #[Route('/student/{studentId}', name: 'grade.addForStudent', methods:['POST'])]

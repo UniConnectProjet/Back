@@ -32,6 +32,12 @@ class AppFixtures extends Fixture
     {
         $this->passwordHasher = $passwordHasher;
     }
+
+    public static function getGroups(): array
+    {
+        return ['dev'];
+    }
+
     private function initParameters(bool $isLight): void
     {
         $this->nbCategories = $isLight ? 2 : 8;

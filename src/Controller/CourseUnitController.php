@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Repository\CourseRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use App\Repository\CourseUnitRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -140,15 +141,15 @@ class CourseUnitController extends AbstractController
         SerializerInterface $serializer,
         int $studentId
     ): JsonResponse {
-        $courseUnits = $repository->findByStudent($studentId); // Suppose que cette méthode existe dans le repository
-        $jsonCourseUnits = $serializer->serialize($courseUnits, 'json', ["groups" => "getAllCourseUnits"]);
+        $courseUnits = $repository->findByStudent($studentId);
 
-        return new JsonResponse(
-            $jsonCourseUnits,
-            JsonResponse::HTTP_OK,
-            [],
-            true
-        );
+        if (!$courseUnits) {
+            return new JsonResponse(null, Response::HTTP_NOT_FOUND);
+        }
+
+        $json = $serializer->serialize($courseUnits, 'json', ['groups' => 'getAllCourseUnits']);
+        return new JsonResponse($json, JsonResponse::HTTP_OK, [], true);
+
     }
 
     /**
