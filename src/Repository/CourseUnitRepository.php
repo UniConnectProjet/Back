@@ -6,9 +6,6 @@ use App\Entity\CourseUnit;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
-/**
- * @extends ServiceEntityRepository<CourseUnit>
- */
 class CourseUnitRepository extends ServiceEntityRepository
 {
     public function __construct(ManagerRegistry $registry)
@@ -16,28 +13,21 @@ class CourseUnitRepository extends ServiceEntityRepository
         parent::__construct($registry, CourseUnit::class);
     }
 
-    //    /**
-    //     * @return CourseUnit[] Returns an array of CourseUnit objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('c')
-    //            ->andWhere('c.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('c.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
-
-    //    public function findOneBySomeField($value): ?CourseUnit
-    //    {
-    //        return $this->createQueryBuilder('c')
-    //            ->andWhere('c.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    /**
+     * Retourne les UE d'un étudiant en passant par ses notes.
+     *
+     * @return CourseUnit[]
+     */
+    public function findByStudent(int $studentId): array
+    {
+        return $this->createQueryBuilder('cu')      // <-- root alias = cu
+            ->distinct()
+            ->innerJoin('cu.courses', 'c')          // CourseUnit -> courses
+            ->innerJoin('c.students', 's')          // Course -> students (ManyToMany inversé)
+            ->andWhere('s.id = :sid')
+            ->setParameter('sid', $studentId)
+            ->getQuery()
+            ->getResult();
+    }
 }
+
