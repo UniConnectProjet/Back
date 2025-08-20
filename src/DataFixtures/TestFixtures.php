@@ -18,7 +18,7 @@ use App\Entity\Student;
 use App\Entity\Grade;
 use App\Entity\Absence;
 use App\Entity\CourseSession;
-
+// Lancer les fixtures avec `php bin/console doctrine:fixtures:load --env=test --group=test --no-interaction`
 final class TestFixtures extends Fixture implements FixtureGroupInterface
 {
     public function __construct(private UserPasswordHasherInterface $hasher) {}

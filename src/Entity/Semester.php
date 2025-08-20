@@ -55,12 +55,16 @@ class Semester
     #[ORM\OneToMany(targetEntity: Absence::class, mappedBy: 'semester')]
     private Collection $absences;
 
+    #[ORM\OneToMany(mappedBy: 'semester', targetEntity: Grade::class)]
+    private Collection $grades;
+
     public function __construct()
     {
         $this->courseUnits = new ArrayCollection();
         $this->students = new ArrayCollection();
         $this->classes = new ArrayCollection();
         $this->absences = new ArrayCollection();
+        $this->grades = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -210,6 +214,33 @@ class Semester
             }
         }
 
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Grade>
+     */
+    public function getGrades(): Collection
+    {
+        return $this->grades;
+    }
+
+    public function addGrade(Grade $grade): self
+    {
+        if (!$this->grades->contains($grade)) {
+            $this->grades->add($grade);
+            $grade->setSemester($this); // maintien de la cohérence
+        }
+        return $this;
+    }
+
+    public function removeGrade(Grade $grade): self
+    {
+        if ($this->grades->removeElement($grade)) {
+            if ($grade->getSemester() === $this) {
+                $grade->setSemester(null);
+            }
+        }
         return $this;
     }
 }

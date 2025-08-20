@@ -33,6 +33,22 @@ class Grade
     #[Groups(['getStudentGrades'])]
     private ?Course $course = null;
 
+    #[ORM\ManyToOne(inversedBy: 'grades')]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['getAllGrades'])]
+    private ?Semester $semester = null;
+
+    public function getSemester(): ?Semester
+    {
+        return $this->semester;
+    }
+
+    public function setSemester(?Semester $semester): self
+    {
+        $this->semester = $semester;
+        return $this;
+    }
+
     public function getId(): ?int
     {
         return $this->id;
