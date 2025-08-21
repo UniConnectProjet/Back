@@ -2,6 +2,50 @@
 
 Toutes les dates sont au format AAAA-MM-JJ. Suivi selon SemVer.
 
+## [v0.4.1] – 2025-08-21
+### Ajouté
+- Tests unitaires validés pour plusieurs contrôleurs : **Auth, Absence, Classe, Course, CourseUnit, MeController, Grade, Level, Student, Schedule, User, Semester** (PR #44).
+- Mise en place de l’intégration **Grafana** (PR #45).
+
+### Modifié
+- Améliorations de la configuration CI/CD (`ci.yml`) : tags, rollback, tests spécifiques, ajustements d’URL DB.
+- Suppression de fichiers inutiles (`sonar.yml`, `doctrine:database:drop`).
+- Mise à jour du **Dockerfile** et `service.yaml`.
+- Fixtures : exclusion de `LoadFixture` en production, ajustements loader pour env dev/test.
+
+### Corrigé
+- Corrections sur **StudentController** (erreur de paramétrage + intégration Grafana).
+
+## [v0.4.0] – 2025-08-20
+### Ajouté
+- Nouvelle entité **CourseSession** avec routes associées.
+- Méthodes de **planning** (dont *addMethodForPlanning*, *nextDay planning*).
+- Méthodes d’absences côté étudiant : **getAbsenceForStudentBySemester** et endpoints liés.
+- Stockage du **JWT dans les cookies** (auth persistante).
+- Nouvelles routes / corrections sur **StudentController** et routage par défaut de l’API.
+- Automatisation **SonarQube** et analyse qualité dans la pipeline.
+
+### Modifié
+- Mise à jour vers **Symfony 7.3** (+ dépendances) après analyse d’impact.
+- Plusieurs améliorations du **Dockerfile** (taille, couches, build).
+- Ajustement des rôles pour **Professor**.
+- **AppFixture** : refactor/typage et cohérence des entités.
+- Fichiers de config mis à jour (**bundles.php**, **security.yml**, configs *preprod/prod*).
+- Documentation : mises à jour **README.md** et **CHANGELOG.md**.
+
+### Corrigé
+- Série de correctifs sur **getScheduleByStudent** (PR #40 → #43).
+- Corrections de **routes** et bugs mineurs divers.
+- Nettoyage SonarQube (duplications, accolades, style).
+
+### CI/CD
+- Multiples mises à jour de **ci.yml** (stratégies par branche *preprod/prod*, rollback, ajout des tests d’environnement).
+- Ajout des étapes **composer install/update** dans la pipeline.
+- Intégration de l’analyse **SonarQube**.
+
+### Sécurité
+- Mise à jour **security.yml** et durcissement des règles d’auth (JWT en cookies).
+
 ## [v0.3.0] – 2025-07-04
 ### Ajouté
 - Analyse de code avec SonarQube (qualité et dette technique).
