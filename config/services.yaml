@@ -25,8 +25,8 @@ services:
         tags: ['kernel.event_subscriber']
     
 when@dev:
-services:
-    Doctrine\Common\DataFixtures\Loader: '@doctrine.fixtures.loader'
+    services:
+        Doctrine\Common\DataFixtures\Loader: '@doctrine.fixtures.loader'
 when@test:
     services:
         Doctrine\Common\DataFixtures\Loader: '@doctrine.fixtures.loader'
