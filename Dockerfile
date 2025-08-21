@@ -23,9 +23,8 @@ COPY --from=vendor /app /var/www/html
 
 # Cache Symfony prod
 ENV APP_ENV=prod
-RUN php bin/console cache:clear --env=prod --no-warmup \
- && php bin/console cache:warmup --env=prod \
- && chown -R www-data:www-data var
+
+RUN mkdir -p var && chown -R www-data:www-data var
 
 # Opcache prod (mini réglages)
 RUN { \
