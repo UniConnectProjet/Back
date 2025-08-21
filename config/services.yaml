@@ -5,8 +5,12 @@ services:
 
     # Charger tous les services de src/
     App\:
-        resource: '../src/*'
-        exclude: '../src/{DependencyInjection,Entity,Tests,Kernel.php}'
+        resource: '../src/'
+        exclude:
+        - '../src/DependencyInjection/'
+        - '../src/Entity/'
+        - '../src/Kernel.php'
+        - '../src/Command/LoadFixturesCommand.php'
 
     # Charger aussi les contrôleurs comme services
     App\Controller\:
