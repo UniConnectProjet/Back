@@ -2,6 +2,26 @@
 
 Toutes les dates sont au format AAAA-MM-JJ. Suivi selon SemVer.
 
+## [v0.5.0] – 2025-08-22
+### Ajouté
+- Ajout de tests complémentaires et correctifs liés aux environnements **dev** et **test**.
+- Nouveaux endpoints et ajustements pour **StudentController** (erreurs de saisie, intégration Grafana).
+- PR #45 : intégration **Grafana** (setup initial, dashboard connecté).
+
+### Modifié
+- Mise à jour du fichier **ci.yml** pour la mise en production (ajout du déclencheur par tags).
+- Exclusion de `LoadFixture` en environnement **prod**.
+- Mise à jour du **Dockerfile** (optimisation build).
+- Ajustement du fichier `service.yaml` et configurations associées.
+- Nettoyage de la structure (`not inside services`).
+
+### Corrigé
+- Fix sur le **Loader** pour les environnements dev/test.
+- Correction des erreurs de configuration liées à Grafana.
+- Correctifs divers sur la configuration CI/CD (`ci.yml`).
+
+---
+
 ## [v0.4.1] – 2025-08-21
 ### Ajouté
 - Tests unitaires validés pour plusieurs contrôleurs : **Auth, Absence, Classe, Course, CourseUnit, MeController, Grade, Level, Student, Schedule, User, Semester** (PR #44).
