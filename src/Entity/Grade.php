@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Repository\GradeRepository;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: GradeRepository::class)]
@@ -14,19 +15,39 @@ class Grade
     private ?int $id = null;
 
     #[ORM\Column]
+    #[Groups(['getAllGrades', 'getAllStudents', 'getStudentGrades'])]
     private ?float $grade = null;
 
     #[ORM\Column]
+    #[Groups(['getAllGrades', 'getAllStudents', 'getStudentGrades'])]
     private ?float $dividor = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllGrades', 'getAllStudents', 'getStudentGrades'])]
     private ?string $title = null;
 
     #[ORM\ManyToOne(inversedBy: 'grades')]
     private ?Student $student = null;
 
     #[ORM\ManyToOne(inversedBy: 'grades')]
+    #[Groups(['getStudentGrades'])]
     private ?Course $course = null;
+
+    #[ORM\ManyToOne(inversedBy: 'grades')]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['getAllGrades'])]
+    private ?Semester $semester = null;
+
+    public function getSemester(): ?Semester
+    {
+        return $this->semester;
+    }
+
+    public function setSemester(?Semester $semester): self
+    {
+        $this->semester = $semester;
+        return $this;
+    }
 
     public function getId(): ?int
     {

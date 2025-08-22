@@ -16,6 +16,16 @@ class CourseRepository extends ServiceEntityRepository
         parent::__construct($registry, Course::class);
     }
 
+    public function findByStudentId(int $studentId): array
+    {
+        return $this->createQueryBuilder('c')
+            ->join('c.class_id', 'cl')
+            ->join('cl.students', 's')
+            ->where('s.id = :studentId')
+            ->setParameter('studentId', $studentId)
+            ->getQuery()
+            ->getResult();
+    }
     //    /**
     //     * @return Course[] Returns an array of Course objects
     //     */

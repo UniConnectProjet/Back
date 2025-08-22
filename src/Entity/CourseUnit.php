@@ -5,6 +5,7 @@ namespace App\Entity;
 use App\Repository\CourseUnitRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use Symfony\Component\Serializer\Annotation\Groups;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: CourseUnitRepository::class)]
@@ -16,12 +17,11 @@ class CourseUnit
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['getAllCourseUnits', 'getAllStudents', 'getCourseUnits'])]
     private ?string $name = null;
 
     #[ORM\Column]
-    private ?int $semester = null;
-
-    #[ORM\Column]
+    #[Groups(['getAllCourseUnits', 'getAllStudents', 'getCourseUnits'])]
     private ?float $average = null;
 
     /**
@@ -29,6 +29,18 @@ class CourseUnit
      */
     #[ORM\OneToMany(targetEntity: Course::class, mappedBy: 'courseUnit')]
     private Collection $courses;
+
+    #[ORM\ManyToOne(inversedBy: 'courseUnits')]
+    private ?Semester $semester = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $averageScore = null;
+
+    #[ORM\ManyToOne(inversedBy: 'courseUnits')]
+    private ?Category $category = null;
+
+    #[ORM\ManyToOne(inversedBy: 'courseUnits')]
+    private ?Level $levels = null;
 
     public function __construct()
     {
@@ -48,18 +60,6 @@ class CourseUnit
     public function setName(string $name): static
     {
         $this->name = $name;
-
-        return $this;
-    }
-
-    public function getSemester(): ?int
-    {
-        return $this->semester;
-    }
-
-    public function setSemester(int $semester): static
-    {
-        $this->semester = $semester;
 
         return $this;
     }
@@ -102,6 +102,54 @@ class CourseUnit
                 $course->setCourseUnit(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getSemester(): ?Semester
+    {
+        return $this->semester;
+    }
+
+    public function setSemester(?Semester $semester): static
+    {
+        $this->semester = $semester;
+
+        return $this;
+    }
+
+    public function getAverageScore(): ?float
+    {
+        return $this->averageScore;
+    }
+
+    public function setAverageScore(?float $averageScore): static
+    {
+        $this->averageScore = $averageScore;
+
+        return $this;
+    }
+
+    public function getCategory(): ?Category
+    {
+        return $this->category;
+    }
+
+    public function setCategory(?Category $category): static
+    {
+        $this->category = $category;
+
+        return $this;
+    }
+
+    public function getLevels(): ?Level
+    {
+        return $this->levels;
+    }
+
+    public function setLevels(?Level $levels): static
+    {
+        $this->levels = $levels;
 
         return $this;
     }
