@@ -57,6 +57,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'professor')]
     private Collection $courseSessions;
 
+    #[ORM\OneToOne(mappedBy: 'userId', cascade: ['persist', 'remove'])]
+    private ?Professor $professor = null;
+
     public function __construct()
     {
         $this->courseSessions = new ArrayCollection();
@@ -221,6 +224,23 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
                 $s->setProfessor(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getProfessor(): ?Professor
+    {
+        return $this->professor;
+    }
+
+    public function setProfessor(Professor $professor): static
+    {
+        // set the owning side of the relation if necessary
+        if ($professor->getUserId() !== $this) {
+            $professor->setUserId($this);
+        }
+
+        $this->professor = $professor;
 
         return $this;
     }

@@ -18,6 +18,7 @@ use App\Entity\Student;
 use App\Entity\Grade;
 use App\Entity\Absence;
 use App\Entity\CourseSession;
+use App\Entity\Professor;
 // Lancer les fixtures avec `php bin/console doctrine:fixtures:load --env=test --group=test --no-interaction`
 final class TestFixtures extends Fixture implements FixtureGroupInterface
 {
@@ -40,14 +41,34 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $admin->setBirthday(new \DateTime('2000-01-01')); // facultatif, mais utile pour les tests
         $em->persist($admin);
 
-        $prof = new User();
-        $prof->setEmail('prof@example.com');
-        $prof->setRoles(['ROLE_PROF']);
-        $prof->setPassword($this->hasher->hashPassword($prof, 'prof'));
-        $prof->setName('Test');
-        $prof->setLastname('User');
-        $prof->setBirthday(new \DateTime('2000-01-01'));
-        $em->persist($prof);
+        // User "prof"
+        $profUser = new User();
+        $profUser->setEmail('prof@example.com');
+        $profUser->setRoles(['ROLE_PROFESSOR']);
+        $profUser->setPassword($this->hasher->hashPassword($profUser, 'prof'));
+        $profUser->setName('Test');
+        $profUser->setLastname('User');
+        $profUser->setBirthday(new \DateTime('2000-01-01'));
+        $em->persist($profUser);
+
+        // Professor lié au User
+        $professor = new Professor();
+        $professor->setUserId($profUser);
+        if (method_exists($professor, 'setIsActive')) {
+            $professor->setIsActive(true);
+        }
+
+        if (method_exists($professor, 'setWeeklyAvailability')) {
+            $professor->setWeeklyAvailability([
+                'MON' => [['08:00','12:00']],
+                'TUE' => [['10:00','12:00'], ['14:00','16:00']],
+                'WED' => [['09:00','11:00']],
+                'THU' => [['13:00','16:00']],
+                'FRI' => [['14:00','17:00']],
+                'SAT' => [], 'SUN' => [],
+            ]);
+        }
+        $em->persist($professor);
 
         $test = new User();
         $test->setEmail('test@example.com');
@@ -132,11 +153,10 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $absence->setJustification('Non justifiée');
         $em->persist($absence);
 
-        // ========= Séance de cours =========
         $session = new CourseSession();
         $session->setCourse($course);
         $session->setClasse($classe);
-        $session->setProfessor($prof);
+        $session->setProfessor($professor);
         $session->setRoom('B204');
         // Dans l’entité CourseSession, setStartAt/setEndAt attendent  DateTime
         $session->setStartAt(new \DateTimeImmutable('2024-10-11 10:00:00'));

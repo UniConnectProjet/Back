@@ -12,14 +12,16 @@ use App\Entity\Level;
 use App\Entity\Semester;
 use App\Entity\Student;
 use App\Entity\CourseSession;
+use App\Entity\Professor;
 use App\Entity\User;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Faker\Factory;
 use PhpParser\Node\Expr\Cast\Array_;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
-
-class AppFixtures extends Fixture
+use Doctrine\Bundle\FixturesBundle\FixtureGroupInterface;
+// Lancer les fixtures avec `php bin/console doctrine:fixtures:load --group=dev -n`
+class AppFixtures extends Fixture implements FixtureGroupInterface
 {
     private UserPasswordHasherInterface $passwordHasher;
     private int $nbCategories;
@@ -134,20 +136,43 @@ class AppFixtures extends Fixture
 
     private function createProfessors(ObjectManager $manager, int $count = 8): array
     {
-        $profs = [];
+        $professors = [];
+
         for ($i = 1; $i <= $count; $i++) {
             $user = new User();
             $user->setName('Prof' . $i);
             $user->setLastname($this->faker->lastName());
             $user->setBirthday($this->faker->dateTimeBetween('-60 years', '-30 years'));
-            $user->setEmail(sprintf('prof%d@example.com', $i));
+            $user->setEmail(sprintf('prof%02d@example.com', $i));
             $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
-            // On met les deux pour compatibilité avec ton libellé “professor”
-            $user->setRoles(['ROLE_PROFESSOR']);
+
+            $roles = $user->getRoles();
+            if (!in_array('ROLE_PROFESSOR', $roles, true)) {
+                $roles[] = 'ROLE_PROFESSOR';
+            }
+            $user->setRoles($roles);
+
             $manager->persist($user);
-            $profs[] = $user;
+
+            $prof = new Professor();
+            $prof->setUserId($user);
+
+            if (method_exists($prof, 'setWeeklyAvailability')) {
+                $prof->setWeeklyAvailability([
+                    'MON' => [['08:00','12:00']],
+                    'TUE' => [['10:00','12:00'], ['14:00','16:00']],
+                    'WED' => [['09:00','11:00']],
+                    'THU' => [['13:00','16:00']],
+                    'FRI' => [['14:00','17:00']],
+                    'SAT' => [], 'SUN' => [],
+                ]);
+            }
+
+            $manager->persist($prof);
+
+            $professors[] = $prof;
         }
-        return $profs;
+        return $professors;
     }
 
 
@@ -419,23 +444,18 @@ class AppFixtures extends Fixture
         }
     }
 
-    private function seedCourseSessions(ObjectManager $manager, array $courses, array $classes, array $users): void
+    private function seedCourseSessions(ObjectManager $manager, array $courses, array $classes, array $professors): void
     {
-        if (!$courses || !$classes) return;
+        if (!$courses || !$classes || !$professors) return;
 
-        // profs si dispo, sinon n’importe quel user
-        $professors = array_values(array_filter($users, fn(User $u) => $this->hasRole($u, 'ROLE_PROF') || $this->hasRole($u, 'ROLE_PROFESSOR')));
-        if (!$professors) $professors = $users;
-
-        // créneaux types (durée en minutes)
+        // créneaux types (durée en minutes) — inchangé
         $slots = [
-            ['h' => 8,  'm' => 0,  'dur' => 120], // 08:00–10:00
-            ['h' => 10, 'm' => 15, 'dur' => 120], // 10:15–12:15
-            ['h' => 14, 'm' => 0,  'dur' => 120], // 14:00–16:00
-            ['h' => 16, 'm' => 15, 'dur' => 120], // 16:15–18:15
+            ['h' => 8,  'm' => 0,  'dur' => 120],
+            ['h' => 10, 'm' => 15, 'dur' => 120],
+            ['h' => 14, 'm' => 0,  'dur' => 120],
+            ['h' => 16, 'm' => 15, 'dur' => 120],
         ];
 
-        // helper pour choisir un cours compatible avec la classe (ManyToMany Course<->Classe), sinon fallback
         $pickCourseForClasse = function(Classe $classe) use ($courses): Course {
             $eligible = [];
             foreach ($courses as $c) {
@@ -446,7 +466,6 @@ class AppFixtures extends Fixture
             return ($eligible ? $eligible[array_rand($eligible)] : $courses[array_rand($courses)]);
         };
 
-        // 2 séances demain pour 2 classes (test "NextDayCourses")
         $tomorrow = (new \DateTimeImmutable('tomorrow'))->setTime(0, 0);
         foreach (array_slice($classes, 0, min(2, count($classes))) as $classe) {
             foreach (array_slice($slots, 0, 2) as $slot) {
@@ -454,7 +473,6 @@ class AppFixtures extends Fixture
             }
         }
 
-        // semaine courante (lun→ven) : 2 séances / jour / classe (pour l’EDT hebdo)
         $monday = (new \DateTimeImmutable('monday this week'))->setTime(0, 0);
         for ($d = 0; $d < 5; $d++) {
             $day = $monday->modify("+$d day");
@@ -467,35 +485,36 @@ class AppFixtures extends Fixture
     }
 
     private function persistSession(
-        ObjectManager $manager,
-        Course $course,
-        Classe $classe,
-        array $professors,
-        \DateTimeImmutable $date,
-        array $slot,
-        string $roomPrefix
+    ObjectManager $manager,
+    Course $course,
+    Classe $classe,
+    array $professors,
+    \DateTimeImmutable $date,
+    array $slot,
+    string $roomPrefix
     ): void {
         $start = $date->setTime($slot['h'], $slot['m']);
         $end   = $start->modify('+' . $slot['dur'] . ' minutes');
-        $prof  = $professors ? $professors[array_rand($professors)] : null;
+
+        /** @var Professor $prof */
+        $prof = $professors[array_rand($professors)];
 
         $s = new CourseSession();
         $s->setCourse($course);
 
-        // Classe : ManyToOne (setClasse) OU ManyToMany (addClasse) selon ton mapping
         if (method_exists($s, 'setClasse')) {
             $s->setClasse($classe);
         } elseif (method_exists($s, 'addClasse')) {
             $s->addClasse($classe);
         }
 
-        if ($prof && method_exists($s, 'setProfessor')) $s->setProfessor($prof);
-        if (method_exists($s, 'setRoom')) $s->setRoom($roomPrefix . random_int(100, 399));
-        $s->setStartAt($start);
-        $s->setEndAt($end);
+        if (method_exists($s, 'setProfessor')) $s->setProfessor($prof);
+        if (method_exists($s, 'setRoom'))      $s->setRoom($roomPrefix . random_int(100, 399));
+        if (method_exists($s, 'setStartAt'))   $s->setStartAt($start);
+        if (method_exists($s, 'setEndAt'))     $s->setEndAt($end);
 
         $manager->persist($s);
-    }
+}
     
     public function load(ObjectManager $manager): void
     {
@@ -509,13 +528,13 @@ class AppFixtures extends Fixture
         $classes = $this->createClasses($manager, $categories, $levels);
         $semesters = $this->createSemesters($manager);
         $users = $this->createUsers($manager, $classes, $semesters);
-        $this->createProfessors($manager);
+        $professors = $this->createProfessors($manager);
         $students = $this->createStudents($manager, $classes, $semesters, $users);
         $courses = $this->createCourses($manager, $categories, $levels, $semesters, $classes);
         $this->createGrades($manager, $students, $courses);
         $this->createAbsences($manager, $students, $semesters);
         $this->assignStudentsToClasses($manager);
-        $this->seedCourseSessions($manager, $courses, $classes, $users); 
+        $this->seedCourseSessions($manager, $courses, $classes, $professors);
 
         $manager->flush();
     }

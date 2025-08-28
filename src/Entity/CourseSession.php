@@ -18,9 +18,6 @@ class CourseSession
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?Classe $classe = null;
 
-    #[ORM\ManyToOne(targetEntity: User::class, inversedBy: 'courseSessions')]
-    private ?User $professor = null;
-
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $startAt;
 
@@ -29,6 +26,10 @@ class CourseSession
 
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $room = null;
+
+    #[ORM\ManyToOne(inversedBy: 'courseSessions')]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?Professor $professor = null;
 
     public function getId(): ?int { 
         return $this->id; 
@@ -47,14 +48,6 @@ class CourseSession
     }
     public function setClasse(?Classe $classe): self { 
         $this->classe = $classe; 
-        return $this; 
-    }
-
-    public function getProfessor(): ?User { 
-        return $this->professor; 
-    }
-    public function setProfessor(?User $professor): self { 
-        $this->professor = $professor; 
         return $this; 
     }
 
@@ -80,5 +73,17 @@ class CourseSession
     public function setRoom(?string $room): self { 
         $this->room = $room; 
         return $this; 
+    }
+
+    public function getProfessor(): ?Professor
+    {
+        return $this->professor;
+    }
+
+    public function setProfessor(?Professor $professor): static
+    {
+        $this->professor = $professor;
+
+        return $this;
     }
 }
