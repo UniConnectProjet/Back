@@ -37,6 +37,10 @@ class Absence
     #[ORM\ManyToOne(inversedBy: 'absences')]
     private ?Semester $semester = null;
 
+    #[ORM\ManyToOne(inversedBy: 'absences')]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?CourseSession $courseSession = null;
+
     public function getId(): ?int
     {
         return $this->id;
@@ -110,6 +114,18 @@ class Absence
     public function setSemester(?Semester $semester): static
     {
         $this->semester = $semester;
+
+        return $this;
+    }
+
+    public function getCourseSession(): ?CourseSession
+    {
+        return $this->courseSession;
+    }
+
+    public function setCourseSession(?CourseSession $courseSession): static
+    {
+        $this->courseSession = $courseSession;
 
         return $this;
     }

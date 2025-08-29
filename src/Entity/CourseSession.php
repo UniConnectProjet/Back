@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
@@ -30,6 +32,17 @@ class CourseSession
     #[ORM\ManyToOne(inversedBy: 'courseSessions')]
     #[ORM\JoinColumn(nullable: false)]
     private ?Professor $professor = null;
+
+    /**
+     * @var Collection<int, Absence>
+     */
+    #[ORM\OneToMany(targetEntity: Absence::class, mappedBy: 'courseSession')]
+    private Collection $absences;
+
+    public function __construct()
+    {
+        $this->absences = new ArrayCollection();
+    }
 
     public function getId(): ?int { 
         return $this->id; 
@@ -83,6 +96,36 @@ class CourseSession
     public function setProfessor(?Professor $professor): static
     {
         $this->professor = $professor;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Absence>
+     */
+    public function getAbsences(): Collection
+    {
+        return $this->absences;
+    }
+
+    public function addAbsence(Absence $absence): static
+    {
+        if (!$this->absences->contains($absence)) {
+            $this->absences->add($absence);
+            $absence->setCourseSession($this);
+        }
+
+        return $this;
+    }
+
+    public function removeAbsence(Absence $absence): static
+    {
+        if ($this->absences->removeElement($absence)) {
+            // set the owning side to null (unless already changed)
+            if ($absence->getCourseSession() === $this) {
+                $absence->setCourseSession(null);
+            }
+        }
 
         return $this;
     }
