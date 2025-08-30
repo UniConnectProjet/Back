@@ -35,4 +35,4 @@ security:
     - { path: ^/api/token/refresh$, roles: PUBLIC_ACCESS }
     - { path: ^/api,               roles: IS_AUTHENTICATED_FULLY }
     - { path: ^/api/student,          roles: ROLE_STUDENT }
-    - { path: ^/api/professor,          roles: ROLE_PROFESSOR }
+    - { path: ^/api/prof,          roles: ROLE_PROFESSOR }
