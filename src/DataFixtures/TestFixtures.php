@@ -124,6 +124,16 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $course->setCourseUnit($cu);
         $em->persist($course);
 
+        if (method_exists($course, 'setSemester')) {
+            $course->setSemester($semester);
+        }
+        
+        if (method_exists($course, 'addClasse')) {
+            $course->addClasse($classe);
+        } elseif (method_exists($course, 'addClass')) {
+            $course->addClass($classe);
+        }
+
         // ========= Étudiant =========
         $student = new Student();
         $student->setClasse($classe);
@@ -132,6 +142,10 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         // côté inverse géré par User::setStudent(), mais on force la cohérence si besoin :
         $test->setStudent($student);
         $em->persist($student);
+
+        if (method_exists($student, 'addSemester')) {
+            $student->addSemester($semester);
+        }
 
         // ========= Note =========
         $grade = new Grade();
@@ -146,7 +160,6 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $absence = new Absence();
         $absence->setStudent($student);
         $absence->setSemester($semester);
-        // Absence::setStartedDate/EndedDate acceptent DateTimeInterface → on met Immutable
         $absence->setStartedDate(new \DateTime('2024-10-10 09:00:00'));
         $absence->setEndedDate(new \DateTime('2024-10-10 12:00:00'));
         $absence->setJustified(false);
@@ -158,10 +171,13 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $session->setClasse($classe);
         $session->setProfessor($professor);
         $session->setRoom('B204');
-        // Dans l’entité CourseSession, setStartAt/setEndAt attendent  DateTime
         $session->setStartAt(new \DateTimeImmutable('2024-10-11 10:00:00'));
         $session->setEndAt(new \DateTimeImmutable('2024-10-11 12:00:00'));
         $em->persist($session);
+
+        if (method_exists($absence, 'setCourseSession')) {
+            $absence->setCourseSession($session);
+        }
 
         $em->flush();
     }

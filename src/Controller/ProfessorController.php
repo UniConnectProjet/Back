@@ -3,7 +3,6 @@
 namespace App\Controller;
 
 use App\Entity\Professor;
-use App\Entity\User;
 use App\Repository\ProfessorRepository;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
@@ -13,172 +12,143 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 
 #[Route('/api/professors')]
-final class ProfessorCrudController extends AbstractController
+class ProfessorController extends AbstractController
 {
-    public function __construct(private EntityManagerInterface $em) {}
-
-
-    private function getProfessorUser(Professor $p): ?User
+    private function isOwner(Professor $prof): bool
     {
-        if (method_exists($p, 'getUser')) return $p->getUser();
-        if (method_exists($p, 'getUserId')) return $p->getUserId();
-        return null;
-    }
-
-    private function setProfessorUser(Professor $p, User $u): void
-    {
-        if (method_exists($p, 'setUser')) { $p->setUser($u); return; }
-        if (method_exists($p, 'setUserId')) { $p->setUserId($u); return; }
-        throw new \LogicException('Professor has no setUser()/setUserId()');
-    }
-
-    private function getWeeklyAvailability(Professor $p): mixed
-    {
-        return method_exists($p, 'getWeeklyAvailability') ? $p->getWeeklyAvailability() : null;
-    }
-
-    private function setWeeklyAvailability(Professor $p, mixed $value): void
-    {
-        if (method_exists($p, 'setWeeklyAvailability')) {
-            // accepte array|null|string (si string JSON)
-            if (is_string($value)) {
-                $decoded = json_decode($value, true);
-                if (json_last_error() === JSON_ERROR_NONE) $value = $decoded;
-            }
-            $p->setWeeklyAvailability($value);
+        $owner = null;
+        if (method_exists($prof, 'getUserId')) {
+            $owner = $prof->getUserId();
+        } elseif (method_exists($prof, 'getUser')) {
+            $owner = $prof->getUser();
         }
+        return $owner && $this->getUser() && $owner->getId() === $this->getUser()->getId();
     }
 
-    private function denyUnlessAdminOrOwner(Professor $p): void
+    private function canViewOrEdit(Professor $prof): bool
     {
-        if ($this->isGranted('ROLE_ADMIN')) return;
-        $me = $this->getUser();
-        $owner = $this->getProfessorUser($p);
-        if (!$me || !$owner || $me->getId() !== $owner->getId()) {
-            throw $this->createAccessDeniedException('Not allowed.');
-        }
+        return $this->isGranted('ROLE_ADMIN') || $this->isOwner($prof);
     }
 
-    private function normalizeProfessor(Professor $p): array
-    {
-        $u = $this->getProfessorUser($p);
-        return [
-            'id' => $p->getId(),
-            'user' => $u ? [
-                'id' => $u->getId(),
-                'name' => method_exists($u, 'getName') ? $u->getName() : null,
-                'lastname' => method_exists($u, 'getLastname') ? $u->getLastname() : null,
-                'email' => method_exists($u, 'getEmail') ? $u->getEmail() : null,
-            ] : null,
-            'weeklyAvailability' => $this->getWeeklyAvailability($p),
-        ];
-    }
-
-    // LIST (ADMIN)
     #[Route('', name: 'prof_index', methods: ['GET'])]
     public function index(ProfessorRepository $repo): JsonResponse
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
-        $list = array_map(fn(Professor $p) => $this->normalizeProfessor($p), $repo->findAll());
-        return $this->json($list);
+        $rows = array_map(function (Professor $p) {
+            $u = method_exists($p, 'getUserId') ? $p->getUserId() : (method_exists($p, 'getUser') ? $p->getUser() : null);
+            return [
+                'id' => $p->getId(),
+                'userId' => $u?->getId(),
+                'weeklyAvailability' => method_exists($p, 'getWeeklyAvailability') ? $p->getWeeklyAvailability() : null,
+                'isActive' => method_exists($p, 'isIsActive') ? $p->isIsActive() : (method_exists($p, 'getIsActive') ? $p->getIsActive() : null),
+            ];
+        }, $repo->findAll());
+
+        return $this->json($rows);
     }
 
-    // GET (ADMIN ou propriétaire)
     #[Route('/{id}', name: 'prof_show', methods: ['GET'])]
-    public function getProfessor(Professor $professor): JsonResponse
+    public function show(Professor $prof): JsonResponse
     {
-        $this->denyUnlessAdminOrOwner($professor);
-        return $this->json($this->normalizeProfessor($professor));
+        if (!$this->canViewOrEdit($prof)) {
+            return $this->json(['error' => 'Forbidden'], 403);
+        }
+
+        $u = method_exists($prof, 'getUserId') ? $prof->getUserId() : (method_exists($prof, 'getUser') ? $prof->getUser() : null);
+
+        return $this->json([
+            'id' => $prof->getId(),
+            'userId' => $u?->getId(),
+            'weeklyAvailability' => method_exists($prof, 'getWeeklyAvailability') ? $prof->getWeeklyAvailability() : null,
+            'isActive' => method_exists($prof, 'isIsActive') ? $prof->isIsActive() : (method_exists($prof, 'getIsActive') ? $prof->getIsActive() : null),
+        ]);
     }
 
-    // CREATE (ADMIN)
     #[Route('', name: 'prof_create', methods: ['POST'])]
     public function create(
         Request $request,
+        UserRepository $userRepo,
         ProfessorRepository $profRepo,
-        UserRepository $userRepo
+        EntityManagerInterface $em
     ): JsonResponse {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
-        $payload = $request->toArray();
-        $userId  = $payload['userId'] ?? null;
+        $data = $request->toArray();
+        $userId = $data['userId'] ?? null;
         if (!$userId) {
-            return $this->json(['error' => 'userId is required'], 400);
+            return $this->json(['error' => 'userId is required'], 422);
         }
 
-        /** @var User|null $user */
-        $user = $userRepo->find((int)$userId);
+        $user = $userRepo->find($userId);
         if (!$user) {
             return $this->json(['error' => 'User not found'], 404);
         }
 
-        $existing = $profRepo->findOneBy(['userId' => $user]) ?? $profRepo->findOneBy(['user' => $user]);
-        if ($existing) {
+        // ⚠️ clé correcte : userId (et non "user")
+        if ($profRepo->findOneBy(['userId' => $user])) {
             return $this->json(['error' => 'Professor already exists for this user'], 409);
         }
 
         $prof = new Professor();
-        $this->setProfessorUser($prof, $user);
-        if (array_key_exists('weeklyAvailability', $payload)) {
-            $this->setWeeklyAvailability($prof, $payload['weeklyAvailability']);
+        if (method_exists($prof, 'setUserId')) {
+            $prof->setUserId($user);
+        } elseif (method_exists($prof, 'setUser')) {
+            $prof->setUser($user);
         }
 
-        // s’assurer du rôle
-        if (method_exists($user, 'getRoles') && method_exists($user, 'setRoles')) {
-            $roles = $user->getRoles();
-            if (!in_array('ROLE_PROFESSOR', $roles, true)) {
-                $roles[] = 'ROLE_PROFESSOR';
-                $user->setRoles(array_values(array_unique($roles)));
-                $this->em->persist($user);
-            }
+        if (isset($data['weeklyAvailability']) && method_exists($prof, 'setWeeklyAvailability')) {
+            $prof->setWeeklyAvailability($data['weeklyAvailability']);
+        }
+        if (array_key_exists('isActive', $data) && method_exists($prof, 'setIsActive')) {
+            $prof->setIsActive((bool) $data['isActive']);
         }
 
-        $this->em->persist($prof);
-        $this->em->flush();
+        $em->persist($prof);
+        $em->flush();
 
-        return $this->json($this->normalizeProfessor($prof), 201);
+        return $this->json(['id' => $prof->getId()], 201);
     }
 
-    #[Route('/{id}', name: 'prof_update', methods: ['PATCH', 'PUT'])]
+    #[Route('/{id}', name: 'prof_update', methods: ['PUT', 'PATCH'])]
     public function update(
-        Professor $professor,
+        Professor $prof,
         Request $request,
-        UserRepository $userRepo,
-        ProfessorRepository $profRepo
+        EntityManagerInterface $em
     ): JsonResponse {
-        $this->denyUnlessAdminOrOwner($professor);
-
-        $payload = $request->toArray();
-
-        if (array_key_exists('weeklyAvailability', $payload)) {
-            $this->setWeeklyAvailability($professor, $payload['weeklyAvailability']);
+        if (!$this->canViewOrEdit($prof)) {
+            return $this->json(['error' => 'Forbidden'], 403);
         }
 
-        if ($this->isGranted('ROLE_ADMIN') && array_key_exists('userId', $payload)) {
-            $newUser = $userRepo->find((int)$payload['userId']);
-            if (!$newUser) return $this->json(['error' => 'User not found'], 404);
+        $data = $request->toArray();
 
-            $exists = $profRepo->findOneBy(['userId' => $newUser]) ?? $profRepo->findOneBy(['user' => $newUser]);
-            if ($exists && $exists->getId() !== $professor->getId()) {
-                return $this->json(['error' => 'Another Professor already linked to this user'], 409);
-            }
-            $this->setProfessorUser($professor, $newUser);
+        if (isset($data['weeklyAvailability']) && method_exists($prof, 'setWeeklyAvailability')) {
+            $prof->setWeeklyAvailability($data['weeklyAvailability']);
+        }
+        if (array_key_exists('isActive', $data) && method_exists($prof, 'setIsActive')) {
+            $prof->setIsActive((bool) $data['isActive']);
         }
 
-        $this->em->flush();
-        return $this->json($this->normalizeProfessor($professor));
+        $em->flush();
+
+        $u = method_exists($prof, 'getUserId') ? $prof->getUserId() : (method_exists($prof, 'getUser') ? $prof->getUser() : null);
+
+        return $this->json([
+            'id' => $prof->getId(),
+            'userId' => $u?->getId(),
+            'weeklyAvailability' => method_exists($prof, 'getWeeklyAvailability') ? $prof->getWeeklyAvailability() : null,
+            'isActive' => method_exists($prof, 'isIsActive') ? $prof->isIsActive() : (method_exists($prof, 'getIsActive') ? $prof->getIsActive() : null),
+        ]);
     }
 
-    // DELETE (ADMIN)
     #[Route('/{id}', name: 'prof_delete', methods: ['DELETE'])]
-    public function delete(Professor $professor): JsonResponse
+    public function delete(Professor $prof, EntityManagerInterface $em): JsonResponse
     {
         $this->denyAccessUnlessGranted('ROLE_ADMIN');
 
-        $this->em->remove($professor);
-        $this->em->flush();
+        $em->remove($prof);
+        $em->flush();
 
-        return $this->json(['ok' => true]);
+        return $this->json(['deleted' => true]);
     }
 }
