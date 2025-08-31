@@ -353,18 +353,16 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         $maxSlots    = 3;
         $minuteStep  = 60;
 
-        $possibleMinutes = ($minuteStep >= 60)
-            ? [0]
-            : range(0, 59, max(1, min(59, $minuteStep)));
+        $possibleMinutes = ($minuteStep >= 60) ? [0] : range(0, 59, max(1, min(59, $minuteStep)));
 
-        $sessionRepo      = $manager->getRepository(CourseSession::class);
+        $sessionRepo = $manager->getRepository(CourseSession::class);
         /** @var array<int, CourseSession[]> $sessionsByClasseId */
         $sessionsByClasseId = [];
 
         foreach ($students as $student) {
             /** @var Student $student */
-            $classe    = method_exists($student, 'getClasse') ? $student->getClasse() : null;
-            $classeId  = $classe?->getId();
+            $classe   = method_exists($student, 'getClasse') ? $student->getClasse() : null;
+            $classeId = $classe?->getId();
 
             if ($classeId && !isset($sessionsByClasseId[$classeId])) {
                 $sessionsByClasseId[$classeId] = $sessionRepo->createQueryBuilder('s')
@@ -383,11 +381,10 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             while (count($intervals) < $targetSlots && $attempts < 32) {
                 $attempts++;
 
-                $duration      = $this->faker->randomElement($durations);
-                $lastStartHour = min($maxHour, 23 - intdiv($duration, 60));
-                if ($lastStartHour < $minHour) {
-                    break;
-                }
+                $duration = $this->faker->randomElement($durations);
+                // borne haute réaliste pour ne jamais dépasser $maxHour
+                $lastStartHour = max($minHour, $maxHour - intdiv($duration, 60));
+                if ($lastStartHour < $minHour) break;
 
                 $startHour   = $this->faker->numberBetween($minHour, $lastStartHour);
                 $startMinute = $this->faker->randomElement($possibleMinutes);
@@ -395,9 +392,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                 $start = (clone $baseDay)->setTime($startHour, $startMinute, 0);
                 $end   = (clone $start)->modify("+{$duration} minutes");
 
-                if ($end->format('Y-m-d') !== $baseDay->format('Y-m-d')) {
-                    continue;
-                }
+                if ($end->format('Y-m-d') !== $baseDay->format('Y-m-d')) continue;
 
                 $overlap = false;
                 foreach ($intervals as [$s, $e]) {
@@ -413,22 +408,18 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             foreach ($intervals as [$start, $end]) {
                 $session = null;
                 if ($classeId && !empty($sessionsByClasseId[$classeId])) {
-                    // 1) priorité: séance qui chevauche l’intervalle le même jour
+                    // priorité: séance qui chevauche l’intervalle le même jour
                     foreach ($sessionsByClasseId[$classeId] as $s) {
                         $sStart = method_exists($s, 'getStartAt') ? $s->getStartAt() : null;
-                        $sEnd   = method_exists($s, 'getEndAt') ? $s->getEndAt() : null;
+                        $sEnd   = method_exists($s, 'getEndAt')   ? $s->getEndAt()   : null;
                         if ($sStart && $sEnd
                             && $sStart->format('Y-m-d') === $start->format('Y-m-d')
-                            && $sStart < $end && $sEnd > $start) {
-                            $session = $s; break;
-                        }
+                            && $sStart < $end && $sEnd > $start) { $session = $s; break; }
                     }
                     if (!$session) {
                         foreach ($sessionsByClasseId[$classeId] as $s) {
                             $sStart = method_exists($s, 'getStartAt') ? $s->getStartAt() : null;
-                            if ($sStart && $sStart->format('Y-m-d') === $start->format('Y-m-d')) {
-                                $session = $s; break;
-                            }
+                            if ($sStart && $sStart->format('Y-m-d') === $start->format('Y-m-d')) { $session = $s; break; }
                         }
                     }
                     if (!$session) {
@@ -438,12 +429,58 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                     continue;
                 }
 
+                // Aligne l’absence sur l’horaire de la séance + convertit en \DateTime (mutable)
+                $sStart = method_exists($session, 'getStartAt') ? $session->getStartAt() : null;
+                $sEnd   = method_exists($session, 'getEndAt')   ? $session->getEndAt()   : null;
+                if (!$sStart || !$sEnd) continue;
+
+                $toMutable = static function (? \DateTimeInterface $d): ?\DateTime {
+                    if ($d instanceof \DateTime) return clone $d;
+                    if ($d instanceof \DateTimeImmutable) return \DateTime::createFromImmutable($d);
+                    return null;
+                };
+                $start = $toMutable($sStart);
+                $end   = $toMutable($sEnd);
+                if (!$start || !$end) continue;
+
+                // anti-doublon (même étudiant + même séance)
+                if ($manager->getRepository(Absence::class)->findOneBy([
+                    'student'       => $student,
+                    'courseSession' => $session,
+                ])) {
+                    continue;
+                }
+
+                // Trouver le semestre
+                $semester = null;
+                $course   = method_exists($session, 'getCourse') ? $session->getCourse() : null;
+                if ($course && method_exists($course, 'getSemester')) {
+                    $semester = $course->getSemester();
+                }
+                if (!$semester && !empty($semesters)) {
+                    foreach ($semesters as $sem) {
+                        $semStart = method_exists($sem, 'getStartDate') ? $sem->getStartDate() : null;
+                        $semEnd   = method_exists($sem, 'getEndDate')   ? $sem->getEndDate()   : null;
+                        if ($semStart instanceof \DateTimeImmutable) $semStart = \DateTime::createFromImmutable($semStart);
+                        if ($semEnd   instanceof \DateTimeImmutable) $semEnd   = \DateTime::createFromImmutable($semEnd);
+                        if ($semStart && $semEnd && $start >= $semStart && $end <= $semEnd) { $semester = $sem; break; }
+                    }
+                }
+                if (!$semester && !empty($semesters)) {
+                    $semester = $semesters[array_rand($semesters)];
+                }
+
+                // Création de l’absence
                 $absence = new Absence();
                 $absence->setStudent($student);
                 $absence->setCourseSession($session);
                 $absence->setStartedDate($start);
                 $absence->setEndedDate($end);
+                if ($semester && method_exists($absence, 'setSemester')) {
+                    $absence->setSemester($semester);
+                }
 
+                // le reste inchangé
                 $justified = $this->faker->boolean();
                 $absence->setJustified($justified);
                 if ($justified) {
@@ -454,31 +491,44 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                     }
                 }
 
-                $semester = null;
-                $course   = method_exists($session, 'getCourse') ? $session->getCourse() : null;
-                if ($course && method_exists($course, 'getSemester')) {
-                    $semester = $course->getSemester();
-                }
-                if (!$semester && !empty($semesters)) {
-                    foreach ($semesters as $s) {
-                        if (method_exists($s, 'getStartDate') && method_exists($s, 'getEndDate')) {
-                            $sStart = $s->getStartDate();
-                            $sEnd   = $s->getEndDate();
-                            if ($sStart && $sEnd && $start >= $sStart && $end <= $sEnd) {
-                                $semester = $s; break;
-                            }
-                        }
+                if (method_exists($absence, 'setStatus')) {
+                    if (method_exists($absence, 'isJustified') && $absence->isJustified()) {
+                        $absence->setStatus(Absence::STATUS_APPROVED);
+                    } elseif (!method_exists($absence, 'getStatus') || $absence->getStatus() === null) {
+                        $absence->setStatus(Absence::STATUS_UNJUSTIFIED);
                     }
-                    $semester = $semester ?? $semesters[array_rand($semesters)];
                 }
-                if ($semester && method_exists($absence, 'setSemester')) {
-                    $absence->setSemester($semester);
+
+                if (method_exists($absence, 'setJustificationReason') && $absence->getJustificationReason() === null) {
+                    $absence->setJustificationReason(null);
+                }
+                if (method_exists($absence, 'setJustificationComment') && $absence->getJustificationComment() === null) {
+                    $absence->setJustificationComment(null);
+                }
+                if (method_exists($absence, 'setJustificationFiles') && $absence->getJustificationFiles() === null) {
+                    $absence->setJustificationFiles([]);
+                }
+                if (method_exists($absence, 'setJustifiedAt') && $absence->getJustifiedAt() === null) {
+                    $absence->setJustifiedAt(null);
+                }
+                if (method_exists($absence, 'setJustifiedBy') && $absence->getJustifiedBy() === null) {
+                    $absence->setJustifiedBy(null);
+                }
+                if (method_exists($absence, 'setReviewComment') && $absence->getReviewComment() === null) {
+                    $absence->setReviewComment(null);
+                }
+                if (method_exists($absence, 'setReviewedAt') && $absence->getReviewedAt() === null) {
+                    $absence->setReviewedAt(null);
+                }
+                if (method_exists($absence, 'setReviewedBy') && $absence->getReviewedBy() === null) {
+                    $absence->setReviewedBy(null);
                 }
 
                 $manager->persist($absence);
             }
         }
     }
+
 
     // Utils
     private function hasRole(User $u, string $role): bool {
@@ -626,6 +676,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         $courses     = $this->createCourses($manager, $categories, $levels, $semesters, $classes);
 
         $sessions = $this->seedCourseSessions($manager, $courses, $classes, $professors);
+        $manager->flush();
 
         $this->createGrades($manager, $students, $courses);
         $this->createAbsences($manager, $students, $semesters, $sessions);
