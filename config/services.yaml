@@ -1,7 +1,12 @@
+parameters:
+    justifications_dir: '%kernel.project_dir%/var/justifications'
+
 services:
     _defaults:
         autowire: true
         autoconfigure: true
+        bind:
+            string $justificationsDir: '%env(resolve:JUSTIFICATIONS_DIR)%'
 
     # Charger tous les services de src/
     App\:
