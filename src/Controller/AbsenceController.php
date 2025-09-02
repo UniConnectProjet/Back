@@ -318,4 +318,57 @@ class AbsenceController extends AbstractController
             'justifiedAt' => $absence->getJustifiedAt()?->format(\DATE_ATOM),
         ], 200);
     }
+
+    #[Route('/me/unjustified', name: 'api_me_absences_unjustified', methods: ['GET'])]
+    #[IsGranted('ROLE_STUDENT')]
+    public function myUnjustified(
+        Request $request,
+        AbsenceRepository $repo,
+        Security $security
+    ): JsonResponse {
+        $user = $security->getUser();
+        if (!$user) {
+            return $this->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $student = method_exists($user, 'getStudent') ? $user->getStudent() : null;
+        $studentId = $student?->getId() ?: (method_exists($user, 'getId') ? (int) $user->getId() : 0);
+        if (!$studentId) {
+            return $this->json(['error' => 'No student attached to the current user'], 400);
+        }
+
+        $semesterId = $request->query->get('semesterId');
+
+        // UNJUSTIFIED (3 / "UNJUSTIFIED") en excluant PENDING (4 / "PENDING")
+        $qb = $repo->createQueryBuilder('a')
+            ->andWhere('a.student = :sid')->setParameter('sid', $studentId)
+            ->andWhere('(a.status = 3 OR a.status = :u1 OR a.status = :u2 OR a.justified = 0)')
+                ->setParameter('u1', 'UNJUSTIFIED')->setParameter('u2', 'unjustified')
+            ->andWhere('(a.status <> 4 AND a.status <> :p1 AND a.status <> :p2)')
+                ->setParameter('p1', 'PENDING')->setParameter('p2', 'pending')
+            ->orderBy('a.startedDate', 'ASC');
+
+        if ($semesterId) {
+            $qb->andWhere('a.semester = :sem')->setParameter('sem', (int) $semesterId);
+        }
+
+        $rows = $qb->getQuery()->getResult();
+
+        $data = array_map(static function (Absence $a) {
+            return [
+                'id'                   => $a->getId(),
+                'startedDate'          => $a->getStartedDate()?->format(\DateTimeInterface::ATOM),
+                'endedDate'            => $a->getEndedDate()?->format(\DateTimeInterface::ATOM),
+                'status'               => $a->getStatus(),
+                'justified'            => (bool) ($a->isJustified() ?? false),
+                'justificationReason'  => $a->getJustificationReason(),
+                'justificationComment' => $a->getJustificationComment(),
+                'justificationFiles'   => $a->getJustificationFiles(),
+                'semester'             => $a->getSemester()?->getId(),
+                'courseSession'        => $a->getCourseSession()?->getId(),
+            ];
+        }, $rows);
+
+        return $this->json(['count' => \count($data), 'data' => $data], 200);
+    }
 }
