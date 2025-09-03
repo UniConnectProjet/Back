@@ -225,12 +225,35 @@ class StudentController extends AbstractController
             return new JsonResponse(['message' => 'No student for this user'], 404);
         }
 
+        // Récupérer les informations de l'utilisateur
+        $email = method_exists($user, 'getEmail') ? (string) $user->getEmail() : '';
+        $name = method_exists($user, 'getName') ? $user->getName() : null;
+        $lastname = method_exists($user, 'getLastname') ? $user->getLastname() : null;
+
+        // Fallback via Student si les champs ne sont pas sur User
+        if ((!$name || !$lastname) && method_exists($student, 'getName')) {
+            if (!$name) $name = $student->getName();
+            if (!$lastname) $lastname = $student->getLastname();
+        }
+
+        $fullName = trim(sprintf('%s %s', (string) $name, (string) $lastname));
+        $displayName = $fullName !== '' ? $fullName : (str_contains($email, '@') ? explode('@', $email)[0] : 'user');
+
         return new JsonResponse([
-            'id'     => $student->getId(),
-            'classe' => $student->getClasse() ? [
-                'id'   => $student->getClasse()->getId(),
-                'name' => $student->getClasse()->getName(),
-            ] : null,
+            'id'          => $user->getId(),
+            'email'       => $email,
+            'roles'       => method_exists($user, 'getRoles') ? $user->getRoles() : [],
+            'name'        => $name,
+            'lastname'    => $lastname,
+            'fullName'    => $fullName !== '' ? $fullName : null,
+            'displayName' => $displayName,
+            'student'     => [
+                'id'     => $student->getId(),
+                'classe' => $student->getClasse() ? [
+                    'id'   => $student->getClasse()->getId(),
+                    'name' => $student->getClasse()->getName(),
+                ] : null,
+            ],
         ], 200);
     }
     
