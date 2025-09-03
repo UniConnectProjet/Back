@@ -614,6 +614,30 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             }
         }
 
+        // Sessions spéciales pour le professeur de test (prof01@example.com)
+        $testProfessor = null;
+        foreach ($professors as $prof) {
+            if (method_exists($prof, 'getUserId') && $prof->getUserId() && $prof->getUserId()->getEmail() === 'prof01@example.com') {
+                $testProfessor = $prof;
+                break;
+            }
+        }
+        
+        if ($testProfessor && count($classes) >= 2) {
+            // Créer 3 sessions pour le professeur de test aujourd'hui
+            $testSlots = [
+                ['h' => 9,  'm' => 0,  'dur' => 120], // 09:00–11:00
+                ['h' => 14, 'm' => 0,  'dur' => 120], // 14:00–16:00
+                ['h' => 16, 'm' => 30, 'dur' => 120], // 16:30–18:30
+            ];
+            
+            foreach ($testSlots as $slot) {
+                $classe = $classes[array_rand($classes)];
+                $course = $pickCourseForClasse($classe);
+                $created[] = $this->persistSessionForProfessor($manager, $course, $classe, $testProfessor, $today, $slot, 'A');
+            }
+        }
+
         // 2 séances demain pour 2 classes (ex: pour tests "NextDayCourses")
         $tomorrow = (new \DateTimeImmutable('tomorrow'))->setTime(0, 0);
         foreach (array_slice($classes, 0, min(2, count($classes))) as $classe) {
@@ -663,6 +687,31 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         $manager->persist($s);
         return $s;
     }
+
+    /** @return CourseSession */
+    private function persistSessionForProfessor(
+        ObjectManager $manager,
+        Course $course,
+        Classe $classe,
+        Professor $professor,                 
+        \DateTimeImmutable $date,
+        array $slot,
+        string $roomPrefix
+    ): CourseSession {
+        $start = $date->setTime($slot['h'], $slot['m']);
+        $end   = $start->modify('+' . $slot['dur'] . ' minutes');
+
+        $s = new CourseSession();
+        $s->setCourse($course);
+        method_exists($s,'setClasse')    && $s->setClasse($classe);
+        method_exists($s,'setProfessor') && $s->setProfessor($professor);
+        method_exists($s,'setRoom')      && $s->setRoom($roomPrefix . random_int(100, 399));
+        method_exists($s,'setStartAt')   && $s->setStartAt($start);
+        method_exists($s,'setEndAt')     && $s->setEndAt($end);
+
+        $manager->persist($s);
+        return $s;
+    }
     
     public function load(ObjectManager $manager): void
     {
@@ -681,13 +730,17 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
         $manager->flush();
 
+        // Réassigner les étudiants aux classes pour s'assurer qu'ils sont bien liés
+        $this->assignStudentsToClasses($manager);
+        $manager->flush();
+
         $courses     = $this->createCourses($manager, $categories, $levels, $semesters, $classes);
 
         $sessions = $this->seedCourseSessions($manager, $courses, $classes, $professors);
         $manager->flush();
 
         $this->createGrades($manager, $students, $courses);
-        $this->createAbsences($manager, $students, $semesters, $sessions);
+        $this->createAbsences($manager, $students, $semesters);
 
         $manager->flush();
     }

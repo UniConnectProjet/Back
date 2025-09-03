@@ -57,12 +57,27 @@ class ProfessorSessionController extends AbstractController
             ->andWhere('s.professor = :p')->setParameter('p', $prof)
             ->orderBy('s.startAt', 'ASC');
 
-        if ($from) $qb->andWhere('s.startAt >= :from')->setParameter('from', new \DateTimeImmutable($from));
-        if ($to)   $qb->andWhere('s.startAt < :to')->setParameter('to', new \DateTimeImmutable($to));
+        if ($from) {
+            $fromDate = new \DateTimeImmutable($from . ' 00:00:00');
+            $qb->andWhere('s.startAt >= :from')->setParameter('from', $fromDate);
+        }
+        if ($to) {
+            $toDate = new \DateTimeImmutable($to . ' 23:59:59');
+            $qb->andWhere('s.startAt <= :to')->setParameter('to', $toDate);
+        }
 
         $sessions = $qb->getQuery()->getResult();
 
         $data = array_map(function (CourseSession $s) {
+            // Vérifier s'il y a des absences enregistrées pour cette séance
+            $hasRoll = $this->em->getRepository(Absence::class)
+                ->createQueryBuilder('a')
+                ->select('COUNT(a.id)')
+                ->where('a.courseSession = :session')
+                ->setParameter('session', $s)
+                ->getQuery()
+                ->getSingleScalarResult() > 0;
+
             return [
                 'id'       => $s->getId(),
                 'course'   => method_exists($s->getCourse(), 'getName') ? $s->getCourse()->getName() : $s->getCourse()->getId(),
@@ -70,6 +85,7 @@ class ProfessorSessionController extends AbstractController
                 'startAt'  => $s->getStartAt()?->format(\DateTimeInterface::ATOM),
                 'endAt'    => $s->getEndAt()?->format(\DateTimeInterface::ATOM),
                 'room'     => method_exists($s, 'getRoom') ? $s->getRoom() : null,
+                'hasRoll'  => $hasRoll,
             ];
         }, $sessions);
 
