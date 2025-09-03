@@ -51,18 +51,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToOne(mappedBy: 'user', cascade: ['persist', 'remove'])]
     private ?Student $student = null;
 
-    /**
-     * @var Collection<int, CourseSession>
-     */
-    #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'professor')]
-    private Collection $courseSessions;
+
 
     #[ORM\OneToOne(mappedBy: 'userId', cascade: ['persist', 'remove'])]
     private ?Professor $professor = null;
 
     public function __construct()
     {
-        $this->courseSessions = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -198,35 +193,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    /**
-     * @return Collection<int, CourseSession>
-     */
-    public function getCourseSessions(): Collection
-    {
-        return $this->courseSessions;
-    }
 
-    public function addCourseSession(CourseSession $s): static
-    {
-        if (!$this->courseSessions->contains($s)) {
-            $this->courseSessions->add($s);
-            $s->setProfessor($this);
-        }
-
-        return $this;
-    }
-
-    public function removeCourseSession(CourseSession $s): static
-    {
-        if ($this->courseSessions->removeElement($s)) {
-            // set the owning side to null (unless already changed)
-            if ($s->getProfessor() === $this) {
-                $s->setProfessor(null);
-            }
-        }
-
-        return $this;
-    }
 
     public function getProfessor(): ?Professor
     {

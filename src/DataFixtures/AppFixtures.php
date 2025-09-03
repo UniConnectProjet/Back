@@ -606,6 +606,14 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             return $eligible ? $eligible[array_rand($eligible)] : $courses[array_rand($courses)];
         };
 
+        // 2 séances aujourd'hui pour 2 classes (pour le dashboard professeur)
+        $today = (new \DateTimeImmutable('today'))->setTime(0, 0);
+        foreach (array_slice($classes, 0, min(2, count($classes))) as $classe) {
+            foreach (array_slice($slots, 0, 2) as $slot) {
+                $created[] = $this->persistSession($manager, $pickCourseForClasse($classe), $classe, $professors, $today, $slot, 'A');
+            }
+        }
+
         // 2 séances demain pour 2 classes (ex: pour tests "NextDayCourses")
         $tomorrow = (new \DateTimeImmutable('tomorrow'))->setTime(0, 0);
         foreach (array_slice($classes, 0, min(2, count($classes))) as $classe) {
