@@ -30,6 +30,47 @@ class ProfessorController extends AbstractController
         return $this->isGranted('ROLE_ADMIN') || $this->isOwner($prof);
     }
 
+    #[Route('/me/professor', name: 'professor.me', methods: ['GET'])]
+    public function getMyProfessor(ProfessorRepository $repo): JsonResponse
+    {
+        $user = $this->getUser();
+        if (!$user) {
+            return new JsonResponse(['message' => 'Unauthorized'], 401);
+        }
+
+        $professor = $repo->findOneBy(['userId' => $user]);
+        if (!$professor) {
+            return new JsonResponse(['message' => 'No professor for this user'], 404);
+        }
+
+        $email = method_exists($user, 'getEmail') ? (string) $user->getEmail() : '';
+        $name = method_exists($user, 'getName') ? $user->getName() : null;
+        $lastname = method_exists($user, 'getLastname') ? $user->getLastname() : null;
+
+        if ((!$name || !$lastname) && method_exists($professor, 'getName')) {
+            if (!$name) $name = $professor->getName();
+            if (!$lastname) $lastname = $professor->getLastname();
+        }
+
+        $fullName = trim(sprintf('%s %s', (string) $name, (string) $lastname));
+        $displayName = $fullName !== '' ? $fullName : (str_contains($email, '@') ? explode('@', $email)[0] : 'user');
+
+        return new JsonResponse([
+            'id'          => $user->getId(),
+            'email'       => $email,
+            'roles'       => method_exists($user, 'getRoles') ? $user->getRoles() : [],
+            'name'        => $name,
+            'lastname'    => $lastname,
+            'fullName'    => $fullName !== '' ? $fullName : null,
+            'displayName' => $displayName,
+            'professor'   => [
+                'id'                  => $professor->getId(),
+                'weeklyAvailability'  => method_exists($professor, 'getWeeklyAvailability') ? $professor->getWeeklyAvailability() : null,
+                'isActive'            => method_exists($professor, 'isIsActive') ? $professor->isIsActive() : (method_exists($professor, 'getIsActive') ? $professor->getIsActive() : null),
+            ],
+        ], 200);
+    }
+
     #[Route('', name: 'prof_index', methods: ['GET'])]
     public function index(ProfessorRepository $repo): JsonResponse
     {
