@@ -65,17 +65,43 @@ class StudentController extends AbstractController
         $semesters = $student->getSemesters(); // Doctrine Collection|array
         $blocks = [];
 
+        // helpers
+        $fmt = static fn(int $m) => sprintf('%dh%02d', intdiv(max(0,$m),60), max(0,$m)%60);
+        $minutesBetween = static function (? \DateTimeInterface $s, ? \DateTimeInterface $e): int {
+            if (!$s || !$e) return 0;
+            return max(0, intdiv($e->getTimestamp() - $s->getTimestamp(), 60));
+        };
+        $normalizeStatus = static function ($a): string {
+            $raw = method_exists($a, 'getStatus') ? $a->getStatus() : null;
+
+            // int
+            if (is_int($raw)) {
+                if ($raw === 4) return 'PENDING';
+                if ($raw === 1) return 'APPROVED';
+                if ($raw === 3) return 'UNJUSTIFIED';
+            }
+            // string
+            if (is_string($raw) && $raw !== '') {
+                $up = strtoupper($raw);
+                if ($up === '4' || str_contains($up, 'PENDING'))    return 'PENDING';
+                if ($up === '1' || str_contains($up, 'APPROVED') || str_contains($up, 'APPROVED')) return 'APPROVED';
+                if ($up === '3' || str_contains($up, 'UNJUSTIFIED')) return 'UNJUSTIFIED';
+            }
+            return 'UNJUSTIFIED';
+        };
+
         foreach ($semesters as $semester) {
             $absences = $this->absences->findBy([
                 'student'  => $student,
                 'semester' => $semester,
             ]);
 
-            $items = array_map(static function ($a) {
+            // Map entités -> DTO pour le front
+            $items = array_map(static function ($a) use ($normalizeStatus) {
                 $start = method_exists($a, 'getStartedDate') ? $a->getStartedDate()
-                      : (method_exists($a, 'getStartedAt') ? $a->getStartedAt() : null);
+                    : (method_exists($a, 'getStartedAt') ? $a->getStartedAt() : null);
                 $end   = method_exists($a, 'getEndedDate')   ? $a->getEndedDate()
-                      : (method_exists($a, 'getEndedAt')   ? $a->getEndedAt()   : null);
+                    : (method_exists($a, 'getEndedAt')   ? $a->getEndedAt()   : null);
 
                 $justified = null;
                 if (method_exists($a, 'isJustified')) {
@@ -83,28 +109,47 @@ class StudentController extends AbstractController
                     $justified = is_bool($val) ? $val : (($val === 0 || $val === 1) ? (bool)$val : null);
                 }
 
+                // champs de justification (tolérant)
+                $files = method_exists($a, 'getJustificationFiles') ? $a->getJustificationFiles() : null;
+                if (is_string($files)) {
+                    $decoded = json_decode($files, true);
+                    $files = is_array($decoded) ? $decoded : [];
+                } elseif (!is_array($files)) {
+                    $files = [];
+                }
+
                 return [
-                    'id'            => $a->getId(),
-                    'startedDate'   => $start?->format(\DATE_ATOM),
-                    'endedDate'     => $end?->format(\DATE_ATOM),
-                    'justified'     => $justified,
-                    'justification' => method_exists($a, 'getJustification') ? $a->getJustification() : null,
+                    'id'                   => $a->getId(),
+                    'startedDate'          => $start?->format(\DATE_ATOM),
+                    'endedDate'            => $end?->format(\DATE_ATOM),
+                    'status'               => $normalizeStatus($a),           // "UNJUSTIFIED" | "PENDING" | "APPROVED"
+                    'justified'            => $justified,
+                    'justifiedAt'          => method_exists($a,'getJustifiedAt') ? $a->getJustifiedAt()?->format(\DATE_ATOM) : null,
+                    'justificationReason'  => method_exists($a,'getJustificationReason') ? $a->getJustificationReason() : null,
+                    'justificationComment' => method_exists($a,'getJustificationComment') ? $a->getJustificationComment() : null,
+                    'justificationFiles'   => $files,
+
+                    // pour compat’ avec ton ancienne payload
+                    'justification'        => method_exists($a, 'getJustification') ? $a->getJustification() : null,
                 ];
             }, $absences);
 
+            // Totaux (exclure PENDING du sous-total "injustifiée")
             $minutes = 0; $jMin = 0; $uMin = 0; $jCount = 0; $uCount = 0;
+
             foreach ($items as $i) {
                 $s = !empty($i['startedDate']) ? new \DateTimeImmutable($i['startedDate']) : null;
                 $e = !empty($i['endedDate'])   ? new \DateTimeImmutable($i['endedDate'])   : null;
-                if ($s && $e) {
-                    $m = max(0, intdiv($e->getTimestamp() - $s->getTimestamp(), 60));
-                    $minutes += $m;
-                    if ($i['justified'] === true)  { $jMin += $m; $jCount++; }
-                    if ($i['justified'] === false) { $uMin += $m; $uCount++; }
+                $m = $minutesBetween($s, $e);
+                $minutes += $m;
+
+                if ($i['status'] === 'APPROVED' || $i['justified'] === true) {
+                    $jMin += $m; $jCount++;
+                } elseif ($i['status'] === 'UNJUSTIFIED') {
+                    // PENDING n'entre pas dans "unjustifiée"
+                    $uMin += $m; $uCount++;
                 }
             }
-
-            $fmt = static fn(int $m) => sprintf('%dh%02d', intdiv(max(0,$m),60), max(0,$m)%60);
 
             $blocks[] = [
                 'semester' => [
@@ -119,10 +164,10 @@ class StudentController extends AbstractController
                     'justified'   => ['minutes' => $jMin, 'hhmm' => $fmt($jMin), 'count' => $jCount],
                     'unjustified' => ['minutes' => $uMin, 'hhmm' => $fmt($uMin), 'count' => $uCount],
                 ],
-                'absences' => $items, 
+                'absences' => $items,
             ];
         }
-        
+
         usort($blocks, function ($a, $b) {
             $ad = $a['semester']['startDate'] ?? null;
             $bd = $b['semester']['startDate'] ?? null;
@@ -132,6 +177,7 @@ class StudentController extends AbstractController
 
         return $blocks;
     }
+
 
     #[Route('/student', name: 'app_student')]
     public function index(): JsonResponse
@@ -169,12 +215,35 @@ class StudentController extends AbstractController
             return new JsonResponse(['message' => 'No student for this user'], 404);
         }
 
+        // Récupérer les informations de l'utilisateur
+        $email = method_exists($user, 'getEmail') ? (string) $user->getEmail() : '';
+        $name = method_exists($user, 'getName') ? $user->getName() : null;
+        $lastname = method_exists($user, 'getLastname') ? $user->getLastname() : null;
+
+        // Fallback via Student si les champs ne sont pas sur User
+        if ((!$name || !$lastname) && method_exists($student, 'getName')) {
+            if (!$name) $name = $student->getName();
+            if (!$lastname) $lastname = $student->getLastname();
+        }
+
+        $fullName = trim(sprintf('%s %s', (string) $name, (string) $lastname));
+        $displayName = $fullName !== '' ? $fullName : (str_contains($email, '@') ? explode('@', $email)[0] : 'user');
+
         return new JsonResponse([
-            'id'     => $student->getId(),
-            'classe' => $student->getClasse() ? [
-                'id'   => $student->getClasse()->getId(),
-                'name' => $student->getClasse()->getName(),
-            ] : null,
+            'id'          => $user->getId(),
+            'email'       => $email,
+            'roles'       => method_exists($user, 'getRoles') ? $user->getRoles() : [],
+            'name'        => $name,
+            'lastname'    => $lastname,
+            'fullName'    => $fullName !== '' ? $fullName : null,
+            'displayName' => $displayName,
+            'student'     => [
+                'id'     => $student->getId(),
+                'classe' => $student->getClasse() ? [
+                    'id'   => $student->getClasse()->getId(),
+                    'name' => $student->getClasse()->getName(),
+                ] : null,
+            ],
         ], 200);
     }
     

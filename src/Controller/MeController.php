@@ -5,38 +5,51 @@ use App\Repository\StudentRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Security\Core\Security;
+use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
 
 #[Route('/api')]
 final class MeController extends AbstractController
 {
     #[Route('/me', name: 'api_me', methods: ['GET'])]
-    public function me(StudentRepository $students): JsonResponse
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function me(Security $security): JsonResponse
     {
-        $u = $this->getUser();
-        if (!$u) {
+        $user = $security->getUser();
+        if (!$user) {
             return $this->json(['message' => 'Unauthorized'], 401);
         }
 
-        $s = $students->findOneBy(['user' => $u]);
+        $email = method_exists($user, 'getEmail') ? (string) $user->getEmail() : '';
+        $login = $email && str_contains($email, '@') ? explode('@', $email)[0] : 'user';
 
-        // tolérant aux variations de getters
-        $first = method_exists($u, 'getName')      ? $u->getName()
-            : (method_exists($u, 'getFirstName') ? $u->getFirstName()
-            : (method_exists($u, 'getFirstname') ? $u->getFirstname() : null));
+        // Tes champs sur User
+        $name     = method_exists($user, 'getName')     ? $user->getName()     : null;
+        $lastname = method_exists($user, 'getLastname') ? $user->getLastname() : null;
 
-        $last  = method_exists($u, 'getLastname')  ? $u->getLastname()
-            : (method_exists($u, 'getLastName')  ? $u->getLastName()
-            : (method_exists($u, 'getLastname')  ? $u->getLastname() : null));
+        // Fallback via Student/Professor si besoin
+        if ((!$name || !$lastname) && method_exists($user, 'getStudent') && $user->getStudent()) {
+            $s = $user->getStudent();
+            if (!$name     && method_exists($s, 'getName'))     $name     = $s->getName();
+            if (!$lastname && method_exists($s, 'getLastname')) $lastname = $s->getLastname();
+        }
+        if ((!$name || !$lastname) && method_exists($user, 'getProfessor') && $user->getProfessor()) {
+            $p = $user->getProfessor();
+            if (!$name     && method_exists($p, 'getName'))     $name     = $p->getName();
+            if (!$lastname && method_exists($p, 'getLastname')) $lastname = $p->getLastname();
+        }
 
-        $email = method_exists($u, 'getEmail') ? $u->getEmail() : $u->getUserIdentifier();
+        $fullName    = trim(sprintf('%s %s', (string) $name, (string) $lastname));
+        $displayName = $fullName !== '' ? $fullName : $login;
 
         return $this->json([
-            'id'        => $u->getId(),
-            'email'     => $email,
-            'roles'     => $u->getRoles(),
-            'firstName' => $first,
-            'lastName'  => $last,
-            'student'   => $s ? ['id' => $s->getId()] : null,
+            'id'          => method_exists($user, 'getId') ? $user->getId() : null,
+            'email'       => $email,
+            'roles'       => method_exists($user, 'getRoles') ? $user->getRoles() : [],
+            'name'        => $name,       // prénom
+            'lastname'    => $lastname,   // nom
+            'fullName'    => $fullName !== '' ? $fullName : null,
+            'displayName' => $displayName,
         ]);
     }
 
