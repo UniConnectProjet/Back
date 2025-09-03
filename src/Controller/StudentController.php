@@ -77,26 +77,16 @@ class StudentController extends AbstractController
             // int
             if (is_int($raw)) {
                 if ($raw === 4) return 'PENDING';
-                if ($raw === 1) return 'JUSTIFIED';
+                if ($raw === 1) return 'APPROVED';
                 if ($raw === 3) return 'UNJUSTIFIED';
             }
             // string
             if (is_string($raw) && $raw !== '') {
                 $up = strtoupper($raw);
                 if ($up === '4' || str_contains($up, 'PENDING'))    return 'PENDING';
-                if ($up === '1' || str_contains($up, 'APPROVED') || str_contains($up, 'JUSTIFIED')) return 'JUSTIFIED';
+                if ($up === '1' || str_contains($up, 'APPROVED') || str_contains($up, 'APPROVED')) return 'APPROVED';
                 if ($up === '3' || str_contains($up, 'UNJUSTIFIED')) return 'UNJUSTIFIED';
             }
-            // fallback via boolean / présence de justification
-            $justified = method_exists($a, 'isJustified') ? (bool)$a->isJustified() : null;
-            $hasSubmission =
-                (method_exists($a,'getJustifiedAt') && $a->getJustifiedAt()) ||
-                (method_exists($a,'getJustificationReason') && $a->getJustificationReason()) ||
-                (method_exists($a,'getJustificationComment') && $a->getJustificationComment()) ||
-                (method_exists($a,'getJustificationFiles') && $a->getJustificationFiles());
-
-            if ($justified === true) return 'JUSTIFIED';
-            if ($hasSubmission)      return 'PENDING';
             return 'UNJUSTIFIED';
         };
 
@@ -132,7 +122,7 @@ class StudentController extends AbstractController
                     'id'                   => $a->getId(),
                     'startedDate'          => $start?->format(\DATE_ATOM),
                     'endedDate'            => $end?->format(\DATE_ATOM),
-                    'status'               => $normalizeStatus($a),           // "UNJUSTIFIED" | "PENDING" | "JUSTIFIED"
+                    'status'               => $normalizeStatus($a),           // "UNJUSTIFIED" | "PENDING" | "APPROVED"
                     'justified'            => $justified,
                     'justifiedAt'          => method_exists($a,'getJustifiedAt') ? $a->getJustifiedAt()?->format(\DATE_ATOM) : null,
                     'justificationReason'  => method_exists($a,'getJustificationReason') ? $a->getJustificationReason() : null,
@@ -153,10 +143,10 @@ class StudentController extends AbstractController
                 $m = $minutesBetween($s, $e);
                 $minutes += $m;
 
-                if ($i['status'] === 'JUSTIFIED' || $i['justified'] === true) {
+                if ($i['status'] === 'APPROVED' || $i['justified'] === true) {
                     $jMin += $m; $jCount++;
                 } elseif ($i['status'] === 'UNJUSTIFIED') {
-                    // PENDING n’entre pas dans "unjustifiée"
+                    // PENDING n'entre pas dans "unjustifiée"
                     $uMin += $m; $uCount++;
                 }
             }

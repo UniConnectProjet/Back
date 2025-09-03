@@ -118,6 +118,16 @@ class Absence
     public function setJustified(bool $justified): static
     {
         $this->justified = $justified;
+        
+        // Synchroniser le status avec le champ justified
+        if ($justified === true) {
+            $this->status = self::STATUS_APPROVED;
+        } else {
+            // Si justified = false, on garde le status actuel sauf s'il était APPROVED
+            if ($this->status === self::STATUS_APPROVED) {
+                $this->status = self::STATUS_UNJUSTIFIED;
+            }
+        }
 
         return $this;
     }
@@ -178,10 +188,12 @@ class Absence
     public function setStatus(string $status): static
     {
         $this->status = $status;
-        // garder l'ancien booléen "justified" cohérent : true uniquement si APPROVED
+        
+        // Synchroniser le champ justified avec le status
         if (property_exists($this, 'justified')) {
             $this->justified = ($status === self::STATUS_APPROVED);
         }
+        
         return $this;
     }
 
