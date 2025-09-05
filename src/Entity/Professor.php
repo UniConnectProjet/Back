@@ -29,9 +29,23 @@ class Professor
     #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'professor')]
     private Collection $courseSessions;
 
+    /**
+     * @var Collection<int, Course>
+     */
+    #[ORM\ManyToMany(targetEntity: Course::class, inversedBy: 'professors')]
+    private Collection $courses;
+
+    /**
+     * @var Collection<int, Category>
+     */
+    #[ORM\ManyToMany(targetEntity: Category::class, inversedBy: 'professors')]
+    private Collection $categories;
+
     public function __construct()
     {
         $this->courseSessions = new ArrayCollection();
+        $this->courses = new ArrayCollection();
+        $this->categories = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -88,6 +102,60 @@ class Professor
             if ($courseSession->getProfessor() === $this) {
                 $courseSession->setProfessor(null);
             }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Course>
+     */
+    public function getCourses(): Collection
+    {
+        return $this->courses;
+    }
+
+    public function addCourse(Course $course): static
+    {
+        if (!$this->courses->contains($course)) {
+            $this->courses->add($course);
+            $course->addProfessor($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCourse(Course $course): static
+    {
+        if ($this->courses->removeElement($course)) {
+            $course->removeProfessor($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Category>
+     */
+    public function getCategories(): Collection
+    {
+        return $this->categories;
+    }
+
+    public function addCategory(Category $category): static
+    {
+        if (!$this->categories->contains($category)) {
+            $this->categories->add($category);
+            $category->addProfessor($this);
+        }
+
+        return $this;
+    }
+
+    public function removeCategory(Category $category): static
+    {
+        if ($this->categories->removeElement($category)) {
+            $category->removeProfessor($this);
         }
 
         return $this;

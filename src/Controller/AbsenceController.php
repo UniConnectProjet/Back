@@ -71,7 +71,7 @@ class AbsenceController extends AbstractController
      * 
      * @return JsonResponse La liste des absences pour le semestre.
      */
-    #[Route('/semester/{semesterId}', name: 'absence.getBySemester', methods: ['GET'])]
+    #[Route('/semester/{semesterId}', name: 'absence.getBySemester', methods: ['GET'], requirements: ['semesterId' => '\d+'])]
     public function getAbsencesBySemester(
         AbsenceRepository $repository,
         SerializerInterface $serializer,
@@ -370,5 +370,42 @@ class AbsenceController extends AbstractController
         }, $rows);
 
         return $this->json(['count' => \count($data), 'data' => $data], 200);
+    }
+
+    #[Route('/semester/by-date', name: 'api_absence_semester_by_date', methods: ['GET'])]
+    public function getSemesterByDate(
+        Request $request,
+        SemesterRepository $semesterRepository
+    ): JsonResponse {
+        $dateString = $request->query->get('date');
+        
+        if (!$dateString) {
+            return $this->json(['error' => 'Date parameter is required'], 400);
+        }
+
+        try {
+            $date = new \DateTimeImmutable($dateString);
+        } catch (\Exception $e) {
+            return $this->json(['error' => 'Invalid date format'], 400);
+        }
+
+        // Trouver le semestre qui contient cette date
+        $semester = $semesterRepository->createQueryBuilder('s')
+            ->where('s.startDate <= :date')
+            ->andWhere('s.endDate >= :date')
+            ->setParameter('date', $date)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        if (!$semester) {
+            return $this->json(['error' => 'No semester found for this date'], 404);
+        }
+
+        return $this->json([
+            'id' => $semester->getId(),
+            'name' => $semester->getName(),
+            'startDate' => $semester->getStartDate()->format('Y-m-d'),
+            'endDate' => $semester->getEndDate()->format('Y-m-d')
+        ]);
     }
 }

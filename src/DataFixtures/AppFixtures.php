@@ -31,6 +31,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
     private int $studentsParClasse;
     private int $nbClasses = 5;
     private \Faker\Generator $faker;
+    private array $classesByCategory = [];
 
     public function __construct(UserPasswordHasherInterface $passwordHasher)
     {
@@ -102,20 +103,33 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                 }
             }
         }
+        
+        // Stocker les classes par catégorie dans une propriété de classe pour y accéder plus tard
+        $this->classesByCategory = $classesByCategory;
+        
         return $classes;
     }
 
     private function createSemesters(ObjectManager $manager): array {
-        // Semestres
+        // Semestres avec dates précises
         $semesters = [];
-        for ($i = 1; $i <= 2; $i++) {
-            $semester = new Semester();
-            $semester->setName("Semestre $i");
-            $semester->setStartDate($this->faker->dateTimeThisYear);
-            $semester->setEndDate($this->faker->dateTimeThisYear);
-            $manager->persist($semester);
-            $semesters[] = $semester;
-        }
+        
+        // Semestre 1 : 2 septembre 2025 au 21 janvier 2026
+        $semester1 = new Semester();
+        $semester1->setName("Semestre 1");
+        $semester1->setStartDate(new \DateTime('2025-09-02 00:00:00'));
+        $semester1->setEndDate(new \DateTime('2026-01-21 23:59:59'));
+        $manager->persist($semester1);
+        $semesters[] = $semester1;
+        
+        // Semestre 2 : 2 février 2026 au 26 juin 2026
+        $semester2 = new Semester();
+        $semester2->setName("Semestre 2");
+        $semester2->setStartDate(new \DateTime('2026-02-02 00:00:00'));
+        $semester2->setEndDate(new \DateTime('2026-06-26 23:59:59'));
+        $manager->persist($semester2);
+        $semesters[] = $semester2;
+        
         return $semesters;
     }
 
@@ -139,44 +153,63 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         return $users;
     }
 
-    private function createProfessors(ObjectManager $manager, int $count = 20): array
+    private function createProfessors(ObjectManager $manager, array $categories, int $count = 20): array
     {
         $professors = [];
-
-        for ($i = 1; $i <= $count; $i++) {
-            $user = new User();
-            $user->setName('Prof' . $i);
-            $user->setLastname($this->faker->lastName());
-            $user->setBirthday($this->faker->dateTimeBetween('-60 years', '-30 years'));
-            $user->setEmail(sprintf('prof%02d@example.com', $i));
-            $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
-
-            $roles = $user->getRoles();
-            if (!in_array('ROLE_PROFESSOR', $roles, true)) {
-                $roles[] = 'ROLE_PROFESSOR';
+        
+        // Répartir les professeurs par catégorie
+        $professorsPerCategory = intval($count / count($categories));
+        $remainingProfessors = $count % count($categories);
+        
+        $professorIndex = 1;
+        
+        foreach ($categories as $categoryIndex => $category) {
+            // Calculer le nombre de professeurs pour cette catégorie
+            $professorsForThisCategory = $professorsPerCategory;
+            if ($categoryIndex < $remainingProfessors) {
+                $professorsForThisCategory++;
             }
-            $user->setRoles($roles);
+            
+            for ($i = 0; $i < $professorsForThisCategory; $i++) {
+                $user = new User();
+                $user->setName('Prof' . $professorIndex);
+                $user->setLastname($this->faker->lastName());
+                $user->setBirthday($this->faker->dateTimeBetween('-60 years', '-30 years'));
+                $user->setEmail(sprintf('prof%02d@example.com', $professorIndex));
+                $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
 
-            $manager->persist($user);
+                $roles = $user->getRoles();
+                if (!in_array('ROLE_PROFESSOR', $roles, true)) {
+                    $roles[] = 'ROLE_PROFESSOR';
+                }
+                $user->setRoles($roles);
 
-            $prof = new Professor();
-            $prof->setUserId($user);
+                $manager->persist($user);
 
-            if (method_exists($prof, 'setWeeklyAvailability')) {
-                $prof->setWeeklyAvailability([
-                    'MON' => [['08:00','12:00']],
-                    'TUE' => [['10:00','12:00'], ['14:00','16:00']],
-                    'WED' => [['09:00','11:00']],
-                    'THU' => [['13:00','16:00']],
-                    'FRI' => [['14:00','17:00']],
-                    'SAT' => [], 'SUN' => [],
-                ]);
+                $prof = new Professor();
+                $prof->setUserId($user);
+                
+                // Affecter le professeur à la catégorie
+                $prof->addCategory($category);
+
+                if (method_exists($prof, 'setWeeklyAvailability')) {
+                    $prof->setWeeklyAvailability([
+                        'MON' => [['08:00','12:00']],
+                        'TUE' => [['10:00','12:00'], ['14:00','16:00']],
+                        'WED' => [['09:00','11:00']],
+                        'THU' => [['13:00','16:00']],
+                        'FRI' => [['14:00','17:00']],
+                        'SAT' => [], 'SUN' => [],
+                    ]);
+                }
+
+                $manager->persist($prof);
+
+                $professors[] = $prof;
+                $professorIndex++;
             }
-
-            $manager->persist($prof);
-
-            $professors[] = $prof;
         }
+        
         return $professors;
     }
 
@@ -264,11 +297,22 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             $categoryByName[$category->getName()] = $category;
         }
 
+        // Créer une map pour retrouver les professeurs par catégorie
+        $professorsByCategory = [];
+        foreach ($professors as $professor) {
+            foreach ($professor->getCategories() as $category) {
+                $professorsByCategory[$category->getName()][] = $professor;
+            }
+        }
+
         foreach ($courseParCategorie as $categorieNom => $ues) {
             $category = $categoryByName[$categorieNom] ?? null;
             if (!$category) {
                 continue;
             }
+
+            // Récupérer les professeurs de cette catégorie
+            $categoryProfessors = $professorsByCategory[$categorieNom] ?? [];
 
             foreach ($ues as $ueName => $moduleNames) {
                 $courseUnit = new CourseUnit();
@@ -290,10 +334,16 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                     $course->setAverage(mt_rand(10, 20));
                     $course->setCourseUnit($courseUnit);
 
-                    if (isset($classesByCategory[$categorieNom])) {
-                        foreach ($classesByCategory[$categorieNom] as $classe) {
-                            $course->addClassId($classe);
+                    // Lier le cours aux classes de cette catégorie
+                    if (isset($this->classesByCategory[$categorieNom])) {
+                        foreach ($this->classesByCategory[$categorieNom] as $classe) {
+                            $course->addClass($classe);
                         }
+                    }
+
+                    // Lier le cours aux professeurs de cette catégorie
+                    foreach ($categoryProfessors as $professor) {
+                        $course->addProfessor($professor);
                     }
 
                     $manager->persist($course);
@@ -622,17 +672,27 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
         $created = [];
 
-        // Créneaux horaires de 8h à 18h sans chevauchements
+        // Créneaux horaires de 8h à 18h avec différents types de cours
         $slots = [
-            ['h' => 8,  'm' => 0,  'dur' => 120], // 08:00–10:00
-            ['h' => 10, 'm' => 15, 'dur' => 120], // 10:15–12:15
-            ['h' => 14, 'm' => 0,  'dur' => 120], // 14:00–16:00
-            ['h' => 16, 'm' => 15, 'dur' => 120], // 16:15–18:15
+            // Cours magistraux (CM) - 2h
+            ['h' => 8,  'm' => 0,  'dur' => 120, 'type' => 'CM'], // 08:00–10:00
+            ['h' => 10, 'm' => 15, 'dur' => 120, 'type' => 'CM'], // 10:15–12:15
+            ['h' => 14, 'm' => 0,  'dur' => 120, 'type' => 'CM'], // 14:00–16:00
+            ['h' => 16, 'm' => 15, 'dur' => 120, 'type' => 'CM'], // 16:15–18:15
+            
+            // Travaux dirigés (TD) - 1h30
+            ['h' => 8,  'm' => 30, 'dur' => 90, 'type' => 'TD'],  // 08:30–10:00
+            ['h' => 10, 'm' => 45, 'dur' => 90, 'type' => 'TD'],  // 10:45–12:15
+            ['h' => 14, 'm' => 30, 'dur' => 90, 'type' => 'TD'],  // 14:30–16:00
+            ['h' => 16, 'm' => 45, 'dur' => 90, 'type' => 'TD'],  // 16:45–18:15
+            
+            // Travaux pratiques (TP) - 3h
+            ['h' => 8,  'm' => 0,  'dur' => 180, 'type' => 'TP'], // 08:00–11:00
+            ['h' => 13, 'm' => 0,  'dur' => 180, 'type' => 'TP'], // 13:00–16:00
         ];
 
-        // Créer un emploi du temps cohérent pour chaque jour
+        // Jours de la semaine
         $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-        $usedSlots = []; // Pour éviter les chevauchements
 
         // helper pour choisir un cours compatible avec la classe (ManyToMany Course<->Classe), sinon fallback
         $pickCourseForClasse = function(Classe $classe) use ($courses): Course {
@@ -645,31 +705,45 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             return $eligible ? $eligible[array_rand($eligible)] : $courses[array_rand($courses)];
         };
 
-        // Créer un emploi du temps cohérent pour chaque jour de la semaine
-        foreach ($days as $dayName) {
-            $day = (new \DateTimeImmutable($dayName . ' this week'))->setTime(0, 0);
-            $usedSlotsForDay = [];
+        // Créer des sessions pour 6 semaines (1.5 mois) - 2 semaines passées + 4 semaines futures
+        $weeksToGenerate = 6;
+        $startDate = new \DateTimeImmutable('first day of this month');
+        $startDate = $startDate->modify('-2 weeks');
+        
+        for ($week = 0; $week < $weeksToGenerate; $week++) {
+            $weekStart = $startDate->modify("+{$week} weeks");
             
-            // Assigner un créneau à chaque classe sans chevauchement
-            foreach ($classes as $classe) {
-                // Choisir un créneau libre pour cette classe
-                $availableSlots = array_filter($slots, function($slot) use ($usedSlotsForDay) {
-                    $slotKey = $slot['h'] . ':' . $slot['m'];
-                    return !in_array($slotKey, $usedSlotsForDay);
-                });
+            // Créer un emploi du temps cohérent pour chaque jour de la semaine
+            foreach ($days as $dayName) {
+                $day = $weekStart->modify($dayName)->setTime(0, 0);
+                $usedSlotsForDay = [];
                 
-                if (!empty($availableSlots)) {
-                    $slot = $availableSlots[array_rand($availableSlots)];
-                    $slotKey = $slot['h'] . ':' . $slot['m'];
-                    $usedSlotsForDay[] = $slotKey;
+                // Assigner 2-3 créneaux par classe par jour (plus réaliste)
+                foreach ($classes as $classe) {
+                    $sessionsPerClass = $this->faker->numberBetween(2, 3); // 2-3 sessions par classe par jour
                     
-                    $course = $pickCourseForClasse($classe);
-                    $created[] = $this->persistSession($manager, $course, $classe, $professors, $day, $slot, 'A');
+                    for ($i = 0; $i < $sessionsPerClass; $i++) {
+                        // Choisir un créneau libre pour cette classe
+                        $availableSlots = array_filter($slots, function($slot) use ($usedSlotsForDay) {
+                            $slotKey = $slot['h'] . ':' . $slot['m'] . '-' . $slot['type'];
+                            return !in_array($slotKey, $usedSlotsForDay);
+                        });
+                        
+                        if (!empty($availableSlots)) {
+                            $slot = $availableSlots[array_rand($availableSlots)];
+                            $slotKey = $slot['h'] . ':' . $slot['m'] . '-' . $slot['type'];
+                            $usedSlotsForDay[] = $slotKey;
+                            
+                            $course = $pickCourseForClasse($classe);
+                            $roomPrefix = $this->getRoomPrefixForSlotType($slot['type']);
+                            $created[] = $this->persistSession($manager, $course, $classe, $professors, $day, $slot, $roomPrefix);
+                        }
+                    }
                 }
             }
         }
 
-        // Sessions spéciales pour le professeur de test (prof01@example.com)
+        // Sessions spéciales pour le professeur de test (prof01@example.com) - plusieurs sessions sur le mois
         $testProfessor = null;
         foreach ($professors as $prof) {
             if (method_exists($prof, 'getUserId') && $prof->getUserId() && $prof->getUserId()->getEmail() === 'prof01@example.com') {
@@ -679,23 +753,46 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         }
         
         if ($testProfessor && count($classes) >= 2) {
-            // Créer des sessions pour le professeur de test aujourd'hui avec des créneaux libres
-            $today = (new \DateTimeImmutable('today'))->setTime(0, 0);
+            // Créer des sessions pour le professeur de test sur plusieurs jours du mois
             $testSlots = [
                 ['h' => 9,  'm' => 0,  'dur' => 120], // 09:00–11:00
                 ['h' => 15, 'm' => 0,  'dur' => 120], // 15:00–17:00
             ];
             
-            foreach ($testSlots as $slot) {
-                $classe = $classes[array_rand($classes)];
-                $course = $pickCourseForClasse($classe);
-                $created[] = $this->persistSessionForProfessor($manager, $course, $classe, $testProfessor, $today, $slot, 'A');
+            // Créer 2 sessions par semaine pour le professeur de test
+            for ($week = 0; $week < $weeksToGenerate; $week++) {
+                $weekStart = $startDate->modify("+{$week} weeks");
+                
+                // Lundi et Mercredi pour le professeur de test
+                $testDays = ['monday', 'wednesday'];
+                foreach ($testDays as $dayName) {
+                    $day = $weekStart->modify($dayName)->setTime(0, 0);
+                    
+                    foreach ($testSlots as $slot) {
+                        $classe = $classes[array_rand($classes)];
+                        $course = $pickCourseForClasse($classe);
+                        $created[] = $this->persistSessionForProfessor($manager, $course, $classe, $testProfessor, $day, $slot, 'A');
+                    }
+                }
             }
         }
 
         return $created;
     }
 
+    private function getRoomPrefixForSlotType(string $type): string
+    {
+        switch($type) {
+            case 'CM':
+                return 'A'; // Amphi
+            case 'TD':
+                return 'B'; // Salle de TD
+            case 'TP':
+                return 'C'; // Laboratoire
+            default:
+                return 'A';
+        }
+    }
 
     /** @return CourseSession */
     private function persistSession(
@@ -762,7 +859,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         $semesters  = $this->createSemesters($manager);
 
         $users       = $this->createUsers($manager, $classes, $semesters);   
-        $professors  = $this->createProfessors($manager);
+        $professors  = $this->createProfessors($manager, $categories);
         $students    = $this->createStudents($manager, $classes, $semesters, $users);
 
         $manager->flush();

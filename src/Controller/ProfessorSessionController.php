@@ -33,6 +33,38 @@ class ProfessorSessionController extends AbstractController
     ) {}
 
     /**
+     * Récupère les cours du professeur connecté
+     * GET /api/prof/courses
+     */
+    #[Route('/courses', name: 'prof_courses_list', methods: ['GET'])]
+    public function getMyCourses(
+        ProfessorRepository $profRepo
+    ): JsonResponse {
+        /** @var User $me */
+        $me = $this->getUser();
+        if (!$me) return $this->json(['error' => 'Unauthenticated'], 401);
+
+        /** @var Professor|null $prof */
+        $prof = $profRepo->findOneBy(['userId' => $me]);
+        if (!$prof) return $this->json(['error' => 'Current user is not a professor'], 403);
+
+        $courses = $prof->getCourses();
+        $data = [];
+        foreach ($courses as $course) {
+            $data[] = [
+                'id' => $course->getId(),
+                'name' => $course->getName(),
+                'average' => $course->getAverage(),
+                'courseUnit' => $course->getCourseUnit() ? $course->getCourseUnit()->getName() : null,
+            ];
+        }
+
+        return $this->json($data);
+    }
+
+
+
+    /**
      * Liste les séances du professeur connecté, avec filtre date facultatif.
      * GET /api/prof/sessions?from=2025-08-25&to=2025-08-31
      */
@@ -236,42 +268,73 @@ class ProfessorSessionController extends AbstractController
                 return $this->json(['error' => 'Séance non accessible'], 403);
             }
 
+            // Récupérer tous les étudiants de la classe de cette session
+            $students = $this->em->getRepository(Student::class)
+                ->createQueryBuilder('s')
+                ->leftJoin('s.user', 'u')
+                ->leftJoin('s.classe', 'c')
+                ->where('c.id = :classeId')
+                ->setParameter('classeId', $session->getClasse()->getId())
+                ->getQuery()
+                ->getResult();
+
+            // Récupérer les absences existantes pour cette session
             $absences = $this->em->getRepository(Absence::class)
                 ->createQueryBuilder('a')
                 ->leftJoin('a.student', 's')
-                ->leftJoin('s.user', 'u')
                 ->where('a.courseSession = :session')
                 ->setParameter('session', $session)
                 ->getQuery()
                 ->getResult();
 
-            $data = array_map(function (Absence $absence) {
-                $student = $absence->getStudent();
-                $user = $student?->getUser();
+            // Créer un map des absences par studentId pour un accès rapide
+            $absenceMap = [];
+            foreach ($absences as $absence) {
+                $studentId = $absence->getStudent()->getId();
+                $absenceMap[$studentId] = $absence;
+            }
+
+            // Construire la réponse avec tous les étudiants
+            $data = array_map(function (Student $student) use ($absenceMap) {
+                $user = $student->getUser();
+                $absence = $absenceMap[$student->getId()] ?? null;
                 
-                // Utiliser le champ presenceStatus s'il existe, sinon calculer
-                $presenceStatus = method_exists($absence, 'getPresenceStatus') ? $absence->getPresenceStatus() : 'PRESENT';
-                $minutesLate = method_exists($absence, 'getMinutesLate') ? $absence->getMinutesLate() : 0;
-                
-                // Si presenceStatus n'est pas défini, calculer basé sur les anciens champs
-                if (!$presenceStatus) {
-                    if (!$absence->isJustified() || $absence->getStatus() === Absence::STATUS_UNJUSTIFIED) {
-                        $presenceStatus = $minutesLate > 0 ? 'LATE' : 'ABSENT';
-                    } else {
-                        $presenceStatus = $minutesLate > 0 ? 'LATE' : 'PRESENT';
+                if ($absence) {
+                    // L'étudiant a une absence enregistrée
+                    $presenceStatus = method_exists($absence, 'getPresenceStatus') ? $absence->getPresenceStatus() : 'PRESENT';
+                    $minutesLate = method_exists($absence, 'getMinutesLate') ? $absence->getMinutesLate() : 0;
+                    
+                    // Si presenceStatus n'est pas défini, calculer basé sur les anciens champs
+                    if (!$presenceStatus) {
+                        if (!$absence->isJustified() || $absence->getStatus() === Absence::STATUS_UNJUSTIFIED) {
+                            $presenceStatus = $minutesLate > 0 ? 'LATE' : 'ABSENT';
+                } else {
+                            $presenceStatus = $minutesLate > 0 ? 'LATE' : 'PRESENT';
+                        }
                     }
+                    
+                    return [
+                        'studentId' => $student->getId(),
+                        'userId' => $user?->getId(),
+                        'status' => $presenceStatus,
+                        'minutesLate' => $minutesLate,
+                        'justified' => $absence->isJustified() ?? false,
+                        'justificationStatus' => $absence->getStatus(),
+                        'note' => method_exists($absence, 'getJustificationNote') ? $absence->getJustificationNote() : null,
+                    ];
+                } else {
+                    // L'étudiant n'a pas d'absence enregistrée = présent
+                    return [
+                        'studentId' => $student->getId(),
+                        'userId' => $user?->getId(),
+                        'status' => 'PRESENT',
+                        'minutesLate' => 0,
+                        'justified' => true,
+                        'justificationStatus' => null,
+                        'note' => null,
+                    ];
                 }
-                
-                return [
-                    'studentId' => $student?->getId(),
-                    'userId' => $user?->getId(),
-                    'status' => $presenceStatus,
-                    'minutesLate' => $minutesLate,
-                    'justified' => $absence->isJustified() ?? false,
-                    'justificationStatus' => $absence->getStatus(), // Statut de justification séparé
-                    'note' => method_exists($absence, 'getJustificationNote') ? $absence->getJustificationNote() : null,
-                ];
-            }, $absences);
+            }, $students);
 
             return $this->json($data);
         } catch (\Exception $e) {
@@ -285,127 +348,6 @@ class ProfessorSessionController extends AbstractController
         }
     }
 
-    /**
-     * Enregistre l'appel (présence/absence/retard) pour une séance.
-     * POST /api/prof/sessions/{id}/roll
-     * Body JSON:
-     * {
-     *   "attendances": [
-     *     {"studentId": 10, "userId":null, "status":"ABSENT","minutesLate":0,"justified":false,"note":null}
-     *   ]
-     * }
-     */
-    #[Route('/sessions/{id}/roll', name: 'prof_session_roll', methods: ['POST'])]
-    public function saveRoll(
-        CourseSession $session,
-        Request $request,
-        ProfessorRepository $profRepo,
-        StudentRepository $studentRepo,
-        UserRepository $userRepo
-    ): JsonResponse {
-        // 1) sécurité
-        $this->denyUnlessOwnedByCurrentProfessor($session, $profRepo);
-
-        $data = $request->toArray();
-        $rows = $data['attendances'] ?? [];
-        $processed = 0;
-
-        // 2) bornes de la séance -> converties en \DateTime (mutable)
-        $startAt = method_exists($session, 'getStartAt') ? $session->getStartAt() : null;
-        $endAt   = method_exists($session, 'getEndAt')   ? $session->getEndAt()   : null;
-
-        if ($startAt instanceof \DateTimeImmutable) { $startAt = \DateTime::createFromImmutable($startAt); }
-        if ($endAt   instanceof \DateTimeImmutable) { $endAt   = \DateTime::createFromImmutable($endAt); }
-
-        if ($startAt === null) { $startAt = new \DateTime(); }
-        if ($endAt   === null) { $endAt   = (clone $startAt)->modify('+120 minutes'); }
-
-        // 3) semestre (si dispo)
-        $course   = method_exists($session, 'getCourse') ? $session->getCourse() : null;
-        $semester = ($course && method_exists($course, 'getSemester')) ? $course->getSemester() : null;
-
-        foreach ($rows as $row) {
-            // --- résolution Student/User ---
-            $student = null; $user = null;
-            $studentId = $row['studentId'] ?? null;
-            $userId    = $row['userId'] ?? null;
-
-            if ($studentId) {
-                $student = $studentRepo->find((int)$studentId);
-            }
-            if (!$student && $userId) {
-                $student = $studentRepo->findOneBy(['user' => (int)$userId]);
-                if (!$student) $user = $userRepo->find((int)$userId);
-            }
-            if (!$student && !$user) {
-                return $this->json(['error' => 'Student not found'], 400);
-            }
-
-            // --- champs métier ---
-            $status      = strtoupper((string)($row['status'] ?? 'PRESENT'));
-            $minutesLate = isset($row['minutesLate']) ? (int)$row['minutesLate'] : 0;
-            $justified   = (bool)($row['justified'] ?? false);
-            $note        = $row['note'] ?? null;
-
-            // --- upsert par (courseSession, student) ---
-            $criteria = ['courseSession' => $session];
-            if ($this->absenceUsesStudent()) {
-                $criteria['student'] = $student;
-            } else {
-                $criteria['student'] = $user ?: ($student?->getUser());
-            }
-
-            /** @var Absence|null $absence */
-            $absence = $this->em->getRepository(Absence::class)->findOneBy($criteria);
-            if (!$absence) {
-                $absence = new Absence();
-                $absence->setCourseSession($session);
-                if ($this->absenceUsesStudent()) {
-                    $absence->setStudent($student);
-                } else {
-                    $absence->setStudent($criteria['student']); // User
-                }
-                if (method_exists($absence, 'setCreatedAt')) {
-                    $absence->setCreatedAt(new \DateTimeImmutable());
-                }
-            }
-
-            // --- dates (tes colonnes sont DATETIME_MUTABLE) ---
-            if (method_exists($absence, 'setStartedDate')) $absence->setStartedDate(clone $startAt);
-            if (method_exists($absence, 'setEndedDate'))   $absence->setEndedDate(clone $endAt);
-
-            // --- autres champs ---
-            if ($semester && method_exists($absence, 'setSemester')) $absence->setSemester($semester);
-            
-            // Déterminer le statut de justification basé sur la présence
-            $justificationStatus = Absence::STATUS_UNJUSTIFIED;
-            if ($status === 'PRESENT') {
-                // Si présent, pas d'absence à justifier
-                $justificationStatus = Absence::STATUS_APPROVED;
-                $absence->setJustified(true);
-            } elseif ($justified) {
-                // Si absent/retard mais justifié
-                $justificationStatus = Absence::STATUS_APPROVED;
-                $absence->setJustified(true);
-            } else {
-                // Si absent/retard non justifié
-                $justificationStatus = Absence::STATUS_UNJUSTIFIED;
-                $absence->setJustified(false);
-            }
-            
-            if (method_exists($absence, 'setPresenceStatus')) $absence->setPresenceStatus($status);
-            if (method_exists($absence, 'setStatus')) $absence->setStatus($justificationStatus);
-            if (method_exists($absence, 'setMinutesLate')) $absence->setMinutesLate($minutesLate);
-            if (method_exists($absence, 'setJustificationNote')) $absence->setJustificationNote($note);
-            if (method_exists($absence, 'setRecordedBy')) $absence->setRecordedBy($this->getUser());
-
-            $this->em->persist($absence);
-            $processed++;
-        }
-
-        $this->em->flush();
-        return $this->json(['ok' => true, 'processed' => $processed]);
-    }
 
 
     #[Route('/sessions/with-students', name: 'prof_sessions_with_students', methods: ['GET'])]
@@ -574,5 +516,247 @@ class ProfessorSessionController extends AbstractController
         $meta = $this->em->getClassMetadata(Grade::class);
         return isset($meta->associationMappings['student'])
             && $meta->associationMappings['student']['targetEntity'] === Student::class;
+    }
+
+    #[Route('/classes', name: 'prof_classes_list', methods: ['GET'])]
+    public function getMyClasses(): JsonResponse
+    {
+        // TEMPORAIRE: Test sans authentification
+        $userRepo = $this->em->getRepository(\App\Entity\User::class);
+        $user = $userRepo->findOneBy(['email' => 'prof01@example.com']);
+        if (!$user) return $this->json(['error' => 'Test user not found'], 404);
+
+        $profRepo = $this->em->getRepository(\App\Entity\Professor::class);
+        $prof = $profRepo->findOneBy(['userId' => $user]);
+        if (!$prof) return $this->json(['error' => 'Test professor not found'], 404);
+
+        // Récupérer les classes du professeur via ses cours (requête optimisée)
+        $classesData = $this->em->getRepository(\App\Entity\Classe::class)
+            ->createQueryBuilder('c')
+            ->select('c.id, c.name')
+            ->innerJoin('c.courses', 'course')
+            ->innerJoin('course.professors', 'prof')
+            ->where('prof = :prof')
+            ->setParameter('prof', $prof)
+            ->groupBy('c.id, c.name')
+            ->orderBy('c.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        $data = [];
+        foreach ($classesData as $classe) {
+            // Pour chaque classe, récupérer les cours associés au professeur
+            $courses = $this->em->getRepository(\App\Entity\Course::class)
+                ->createQueryBuilder('course')
+                ->select('course.name')
+                ->innerJoin('course.classes', 'classe')
+                ->innerJoin('course.professors', 'prof')
+                ->where('classe.id = :classId')
+                ->andWhere('prof = :prof')
+                ->setParameter('classId', $classe['id'])
+                ->setParameter('prof', $prof)
+                ->getQuery()
+                ->getResult();
+
+            $data[] = [
+                'id' => $classe['id'],
+                'name' => $classe['name'],
+                'courses' => array_map(fn($c) => $c['name'], $courses)
+            ];
+        }
+
+        return $this->json($data);
+    }
+
+    #[Route('/classes/{classId}/students', name: 'prof_class_students', methods: ['GET'])]
+    public function getClassStudents(int $classId): JsonResponse
+    {
+        // Récupérer les étudiants de la classe
+        $students = $this->em->getRepository(\App\Entity\Student::class)
+            ->createQueryBuilder('s')
+            ->select('s.id as studentId, u.lastname, u.name, u.email')
+            ->innerJoin('s.classe', 'c')
+            ->innerJoin('s.user', 'u')
+            ->where('c.id = :classId')
+            ->setParameter('classId', $classId)
+            ->orderBy('u.lastname', 'ASC')
+            ->addOrderBy('u.name', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        return $this->json([
+            'students' => $students
+        ]);
+    }
+
+    #[Route('/classes/{classId}/courses', name: 'prof_class_courses', methods: ['GET'])]
+    public function getClassCourses(int $classId): JsonResponse
+    {
+        // Trouver un professeur de test
+        $userRepo = $this->em->getRepository(\App\Entity\User::class);
+        $user = $userRepo->findOneBy(['email' => 'prof01@example.com']);
+
+        if (!$user) {
+            return $this->json(['error' => 'Test user not found'], 404);
+        }
+
+        $profRepo = $this->em->getRepository(\App\Entity\Professor::class);
+        $prof = $profRepo->findOneBy(['userId' => $user]);
+        if (!$prof) {
+            return $this->json(['error' => 'Test professor not found'], 404);
+        }
+
+        // Récupérer les cours du professeur pour cette classe
+        $courses = $this->em->getRepository(\App\Entity\Course::class)
+            ->createQueryBuilder('course')
+            ->select('course.id, course.name')
+            ->innerJoin('course.classes', 'classe')
+            ->innerJoin('course.professors', 'prof')
+            ->where('classe.id = :classId')
+            ->andWhere('prof = :prof')
+            ->setParameter('classId', $classId)
+            ->setParameter('prof', $prof)
+            ->getQuery()
+            ->getResult();
+
+        return $this->json([
+            'courses' => $courses
+        ]);
+    }
+
+    #[Route('/roll/save', name: 'prof_save_roll', methods: ['POST'])]
+    public function saveRoll(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+
+        if (!isset($data['sessionId']) || !isset($data['attendances'])) {
+            return $this->json(['error' => 'Données manquantes'], 400);
+        }
+
+        $sessionId = $data['sessionId'];
+        $attendances = $data['attendances'];
+
+        try {
+            // Récupérer la session
+            $session = $this->em->getRepository(\App\Entity\CourseSession::class)->find($sessionId);
+            if (!$session) {
+                return $this->json(['error' => 'Session non trouvée'], 404);
+            }
+
+            // Déterminer le semestre en fonction de la date de la session
+            $sessionDate = $session->getStartAt();
+            $semester = $this->em->getRepository(\App\Entity\Semester::class)
+                ->createQueryBuilder('s')
+                ->where('s.startDate <= :date')
+                ->andWhere('s.endDate >= :date')
+                ->setParameter('date', $sessionDate)
+                ->getQuery()
+                ->getOneOrNullResult();
+
+            if (!$semester) {
+                return $this->json(['error' => 'Aucun semestre trouvé pour cette date'], 404);
+            }
+
+            // Récupérer tous les étudiants de la classe de cette session pour validation
+            $classStudents = $this->em->getRepository(\App\Entity\Student::class)
+                ->createQueryBuilder('s')
+                ->leftJoin('s.classe', 'c')
+                ->where('c.id = :classeId')
+                ->setParameter('classeId', $session->getClasse()->getId())
+                ->getQuery()
+                ->getResult();
+
+            $validStudentIds = array_map(fn($s) => $s->getId(), $classStudents);
+
+            $savedAbsences = [];
+
+            // Parcourir les présences
+            foreach ($attendances as $studentId => $attendance) {
+                // Valider que l'étudiant appartient à la classe de la session
+                if (!in_array($studentId, $validStudentIds)) {
+                    return $this->json([
+                        'error' => "L'étudiant ID $studentId n'appartient pas à la classe de cette session",
+                        'validStudentIds' => $validStudentIds
+                    ], 400);
+                }
+
+                $student = $this->em->getRepository(\App\Entity\Student::class)->find($studentId);
+                if (!$student) continue;
+
+                $presenceStatus = $attendance['status'] ?? 'PRESENT';
+                $minutesLate = $attendance['minutesLate'] ?? 0;
+                $justificationNote = $attendance['justificationNote'] ?? '';
+
+                // Si présent, pas besoin de créer d'absence
+                if ($presenceStatus === 'PRESENT') {
+                    continue;
+                }
+
+                // Vérifier si une absence existe déjà pour cette session et cet étudiant
+                $existingAbsence = $this->em->getRepository(\App\Entity\Absence::class)
+                    ->findOneBy([
+                        'student' => $student,
+                        'courseSession' => $session
+                    ]);
+
+                if ($existingAbsence) {
+                    // Mettre à jour l'absence existante
+                    $existingAbsence->setPresenceStatus($presenceStatus);
+                    $existingAbsence->setMinutesLate($minutesLate);
+                    $existingAbsence->setJustificationNote($justificationNote);
+                    $existingAbsence->setJustified($presenceStatus === 'LATE' && $attendance['justified'] ?? false);
+                } else {
+                    // Créer une nouvelle absence
+                    $absence = new \App\Entity\Absence();
+                    $absence->setStudent($student);
+                    $absence->setCourseSession($session);
+                    $absence->setSemester($semester);
+                    // Convertir DateTimeImmutable en DateTime pour Doctrine
+                    $startDate = $session->getStartAt();
+                    $endDate = $session->getEndAt();
+                    
+                    if ($startDate instanceof \DateTimeImmutable) {
+                        $startDate = \DateTime::createFromImmutable($startDate);
+                    }
+                    if ($endDate instanceof \DateTimeImmutable) {
+                        $endDate = \DateTime::createFromImmutable($endDate);
+                    }
+                    
+                    $absence->setStartedDate($startDate);
+                    $absence->setEndedDate($endDate);
+                    $absence->setPresenceStatus($presenceStatus);
+                    $absence->setMinutesLate($minutesLate);
+                    $absence->setJustificationNote($justificationNote);
+                    $absence->setJustified($presenceStatus === 'LATE' && $attendance['justified'] ?? false);
+                    $absence->setStatus(\App\Entity\Absence::STATUS_UNJUSTIFIED);
+
+                    $this->em->persist($absence);
+                }
+
+                $savedAbsences[] = [
+                    'studentId' => $studentId,
+                    'status' => $presenceStatus,
+                    'minutesLate' => $minutesLate,
+                    'justified' => $attendance['justified'] ?? false
+                ];
+            }
+
+            $this->em->flush();
+
+            return $this->json([
+                'success' => true,
+                'message' => 'Présences enregistrées avec succès',
+                'savedAbsences' => $savedAbsences,
+                'semester' => [
+                    'id' => $semester->getId(),
+                    'name' => $semester->getName()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Erreur lors de l\'enregistrement: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

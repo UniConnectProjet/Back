@@ -7,10 +7,14 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Security;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Doctrine\ORM\EntityManagerInterface;
 
 #[Route('/api')]
 final class MeController extends AbstractController
 {
+    public function __construct(
+        private EntityManagerInterface $em
+    ) {}
     #[Route('/me', name: 'api_me', methods: ['GET'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]
     public function me(Security $security): JsonResponse
@@ -50,6 +54,55 @@ final class MeController extends AbstractController
             'lastname'    => $lastname,   // nom
             'fullName'    => $fullName !== '' ? $fullName : null,
             'displayName' => $displayName,
+        ]);
+    }
+
+    #[Route('/me/grades', name: 'api_me_grades', methods: ['GET'])]
+    #[IsGranted('IS_AUTHENTICATED_FULLY')]
+    public function getMyGrades(Security $security): JsonResponse
+    {
+        $user = $security->getUser();
+        if (!$user) {
+            return $this->json(['message' => 'Unauthorized'], 401);
+        }
+
+        // Récupérer l'étudiant associé à l'utilisateur
+        $student = $this->em->getRepository(\App\Entity\Student::class)
+            ->findOneBy(['user' => $user]);
+
+        if (!$student) {
+            return $this->json(['message' => 'Utilisateur non trouvé comme étudiant'], 404);
+        }
+
+        // Récupérer les notes de l'étudiant
+        $grades = $this->em->getRepository(\App\Entity\Grade::class)
+            ->createQueryBuilder('g')
+            ->select('g.title, g.grade as score, g.dividor as outOf, c.name as courseName')
+            ->leftJoin('g.course', 'c')
+            ->where('g.student = :student')
+            ->setParameter('student', $student)
+            ->orderBy('g.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        // Formater les notes pour l'interface
+        $formattedGrades = array_map(function($grade) {
+            return [
+                'title' => $grade['title'],
+                'score' => $grade['score'],
+                'total' => $grade['outOf'],
+                'courseName' => $grade['courseName']
+            ];
+        }, $grades);
+
+        return $this->json([
+            'student' => [
+                'id' => $student->getId(),
+                'name' => $user->getName(),
+                'lastname' => $user->getLastname(),
+                'email' => $user->getEmail()
+            ],
+            'grades' => $formattedGrades
         ]);
     }
 
