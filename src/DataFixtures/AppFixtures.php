@@ -44,10 +44,10 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
     private function initParameters(bool $isLight): void
     {
-        $this->nbCategories = $isLight ? 2 : 8;
-        $this->nbNiveaux = $isLight ? 2 : 6;
-        $this->classesParCombo = $isLight ? 2 : 5;
-        $this->studentsParClasse = 50;
+        $this->nbCategories = $isLight ? 2 : 2; // Seulement 2 catégories
+        $this->nbNiveaux = $isLight ? 2 : 2; // Seulement 2 niveaux
+        $this->classesParCombo = 5; // 5 classes par catégorie
+        $this->studentsParClasse = 10; // 10 élèves par classe
     }
 
 
@@ -122,7 +122,10 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
     private function createUsers(ObjectManager $manager, array $classes, array $semesters): array
     {
         $users = [];
-        for ($j = 0; $j < $this->studentsParClasse; $j++) {
+        // Créer exactement 50 étudiants (10 par classe × 5 classes)
+        $totalStudents = 50;
+        
+        for ($j = 0; $j < $totalStudents; $j++) {
             $user = new User();
             $user->setName($this->faker->firstName());
             $user->setLastname($this->faker->lastName());
@@ -136,7 +139,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         return $users;
     }
 
-    private function createProfessors(ObjectManager $manager, int $count = 8): array
+    private function createProfessors(ObjectManager $manager, int $count = 20): array
     {
         $professors = [];
 
@@ -212,7 +215,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
     }
 
     
-    private function createCourses(ObjectManager $manager, array $categories, array $levels, array $semesters, array $classes): array { 
+    private function createCourses(ObjectManager $manager, array $categories, array $levels, array $semesters, array $classes, array $professors): array { 
         // Courses par catégorie
         $courseParCategorie = [
             'Informatique' => [
@@ -499,6 +502,38 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                     }
                 }
 
+                // Ajouter les nouveaux champs pour l'appel
+                $presenceStatuses = ['PRESENT', 'ABSENT', 'LATE'];
+                $presenceStatus = $this->faker->randomElement($presenceStatuses);
+                
+                if (method_exists($absence, 'setPresenceStatus')) {
+                    $absence->setPresenceStatus($presenceStatus);
+                }
+                
+                // Minutes de retard si LATE
+                $minutesLate = 0;
+                if ($presenceStatus === 'LATE') {
+                    $minutesLate = $this->faker->numberBetween(5, 60);
+                }
+                if (method_exists($absence, 'setMinutesLate')) {
+                    $absence->setMinutesLate($minutesLate);
+                }
+                
+                // Note du professeur
+                if (method_exists($absence, 'setJustificationNote')) {
+                    if ($presenceStatus !== 'PRESENT' && $this->faker->boolean(30)) {
+                        $absence->setJustificationNote($this->faker->sentence());
+                    }
+                }
+                
+                // Professeur qui a enregistré l'appel
+                if (method_exists($absence, 'setRecordedBy')) {
+                    $professor = $session->getProfessor();
+                    if ($professor && method_exists($professor, 'getUser')) {
+                        $absence->setRecordedBy($professor->getUser());
+                    }
+                }
+
                 if (method_exists($absence, 'setJustificationReason') && $absence->getJustificationReason() === null) {
                     $absence->setJustificationReason(null);
                 }
@@ -587,13 +622,17 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
         $created = [];
 
-        // créneaux types (durée en minutes)
+        // Créneaux horaires de 8h à 18h sans chevauchements
         $slots = [
             ['h' => 8,  'm' => 0,  'dur' => 120], // 08:00–10:00
             ['h' => 10, 'm' => 15, 'dur' => 120], // 10:15–12:15
             ['h' => 14, 'm' => 0,  'dur' => 120], // 14:00–16:00
             ['h' => 16, 'm' => 15, 'dur' => 120], // 16:15–18:15
         ];
+
+        // Créer un emploi du temps cohérent pour chaque jour
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+        $usedSlots = []; // Pour éviter les chevauchements
 
         // helper pour choisir un cours compatible avec la classe (ManyToMany Course<->Classe), sinon fallback
         $pickCourseForClasse = function(Classe $classe) use ($courses): Course {
@@ -606,11 +645,27 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             return $eligible ? $eligible[array_rand($eligible)] : $courses[array_rand($courses)];
         };
 
-        // 2 séances aujourd'hui pour 2 classes (pour le dashboard professeur)
-        $today = (new \DateTimeImmutable('today'))->setTime(0, 0);
-        foreach (array_slice($classes, 0, min(2, count($classes))) as $classe) {
-            foreach (array_slice($slots, 0, 2) as $slot) {
-                $created[] = $this->persistSession($manager, $pickCourseForClasse($classe), $classe, $professors, $today, $slot, 'A');
+        // Créer un emploi du temps cohérent pour chaque jour de la semaine
+        foreach ($days as $dayName) {
+            $day = (new \DateTimeImmutable($dayName . ' this week'))->setTime(0, 0);
+            $usedSlotsForDay = [];
+            
+            // Assigner un créneau à chaque classe sans chevauchement
+            foreach ($classes as $classe) {
+                // Choisir un créneau libre pour cette classe
+                $availableSlots = array_filter($slots, function($slot) use ($usedSlotsForDay) {
+                    $slotKey = $slot['h'] . ':' . $slot['m'];
+                    return !in_array($slotKey, $usedSlotsForDay);
+                });
+                
+                if (!empty($availableSlots)) {
+                    $slot = $availableSlots[array_rand($availableSlots)];
+                    $slotKey = $slot['h'] . ':' . $slot['m'];
+                    $usedSlotsForDay[] = $slotKey;
+                    
+                    $course = $pickCourseForClasse($classe);
+                    $created[] = $this->persistSession($manager, $course, $classe, $professors, $day, $slot, 'A');
+                }
             }
         }
 
@@ -624,36 +679,17 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         }
         
         if ($testProfessor && count($classes) >= 2) {
-            // Créer 3 sessions pour le professeur de test aujourd'hui
+            // Créer des sessions pour le professeur de test aujourd'hui avec des créneaux libres
+            $today = (new \DateTimeImmutable('today'))->setTime(0, 0);
             $testSlots = [
                 ['h' => 9,  'm' => 0,  'dur' => 120], // 09:00–11:00
-                ['h' => 14, 'm' => 0,  'dur' => 120], // 14:00–16:00
-                ['h' => 16, 'm' => 30, 'dur' => 120], // 16:30–18:30
+                ['h' => 15, 'm' => 0,  'dur' => 120], // 15:00–17:00
             ];
             
             foreach ($testSlots as $slot) {
                 $classe = $classes[array_rand($classes)];
                 $course = $pickCourseForClasse($classe);
                 $created[] = $this->persistSessionForProfessor($manager, $course, $classe, $testProfessor, $today, $slot, 'A');
-            }
-        }
-
-        // 2 séances demain pour 2 classes (ex: pour tests "NextDayCourses")
-        $tomorrow = (new \DateTimeImmutable('tomorrow'))->setTime(0, 0);
-        foreach (array_slice($classes, 0, min(2, count($classes))) as $classe) {
-            foreach (array_slice($slots, 0, 2) as $slot) {
-                $created[] = $this->persistSession($manager, $pickCourseForClasse($classe), $classe, $professors, $tomorrow, $slot, 'B');
-            }
-        }
-
-        // semaine courante (lun→ven) : 2 séances / jour / classe (pour l’EDT hebdo)
-        $monday = (new \DateTimeImmutable('monday this week'))->setTime(0, 0);
-        for ($d = 0; $d < 5; $d++) {
-            $day = $monday->modify("+$d day");
-            foreach ($classes as $classe) {
-                foreach (array_slice($slots, 0, 2) as $slot) {
-                    $created[] = $this->persistSession($manager, $pickCourseForClasse($classe), $classe, $professors, $day, $slot, 'A');
-                }
             }
         }
 
@@ -673,8 +709,9 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
     ) {
         $start = $date->setTime($slot['h'], $slot['m']);
         $end   = $start->modify('+' . $slot['dur'] . ' minutes');
-        /** @var Professor $prof */
-        $prof  = $professors[array_rand($professors)];
+        
+        // Prendre un professeur aléatoire pour cette session
+        $prof = $professors[array_rand($professors)];
 
         $s = new CourseSession();
         $s->setCourse($course);
@@ -734,7 +771,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         $this->assignStudentsToClasses($manager);
         $manager->flush();
 
-        $courses     = $this->createCourses($manager, $categories, $levels, $semesters, $classes);
+        $courses     = $this->createCourses($manager, $categories, $levels, $semesters, $classes, $professors);
 
         $sessions = $this->seedCourseSessions($manager, $courses, $classes, $professors);
         $manager->flush();

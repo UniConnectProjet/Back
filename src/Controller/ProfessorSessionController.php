@@ -209,6 +209,83 @@ class ProfessorSessionController extends AbstractController
     }
 
     /**
+     * Récupère les absences enregistrées pour une séance.
+     * GET /api/prof/sessions/{id}/roll
+     */
+    #[Route('/sessions/{id}/roll', name: 'prof_session_get_roll', methods: ['GET'], priority: 1)]
+    public function getRoll(
+        CourseSession $session,
+        ProfessorRepository $profRepo
+    ): JsonResponse {
+        try {
+            // Debug: vérifier l'utilisateur connecté
+            $user = $this->getUser();
+            if (!$user) {
+                return $this->json(['error' => 'Non authentifié'], 401);
+            }
+
+            // Debug: vérifier le professeur
+            $prof = $profRepo->findOneBy(['userId' => $user]);
+            if (!$prof) {
+                return $this->json(['error' => 'Utilisateur non professeur'], 403);
+            }
+
+            // Debug: vérifier la propriété de la séance
+            $sessionProfessor = $session->getProfessor();
+            if (!$sessionProfessor || $sessionProfessor->getId() !== $prof->getId()) {
+                return $this->json(['error' => 'Séance non accessible'], 403);
+            }
+
+            $absences = $this->em->getRepository(Absence::class)
+                ->createQueryBuilder('a')
+                ->leftJoin('a.student', 's')
+                ->leftJoin('s.user', 'u')
+                ->where('a.courseSession = :session')
+                ->setParameter('session', $session)
+                ->getQuery()
+                ->getResult();
+
+            $data = array_map(function (Absence $absence) {
+                $student = $absence->getStudent();
+                $user = $student?->getUser();
+                
+                // Utiliser le champ presenceStatus s'il existe, sinon calculer
+                $presenceStatus = method_exists($absence, 'getPresenceStatus') ? $absence->getPresenceStatus() : 'PRESENT';
+                $minutesLate = method_exists($absence, 'getMinutesLate') ? $absence->getMinutesLate() : 0;
+                
+                // Si presenceStatus n'est pas défini, calculer basé sur les anciens champs
+                if (!$presenceStatus) {
+                    if (!$absence->isJustified() || $absence->getStatus() === Absence::STATUS_UNJUSTIFIED) {
+                        $presenceStatus = $minutesLate > 0 ? 'LATE' : 'ABSENT';
+                    } else {
+                        $presenceStatus = $minutesLate > 0 ? 'LATE' : 'PRESENT';
+                    }
+                }
+                
+                return [
+                    'studentId' => $student?->getId(),
+                    'userId' => $user?->getId(),
+                    'status' => $presenceStatus,
+                    'minutesLate' => $minutesLate,
+                    'justified' => $absence->isJustified() ?? false,
+                    'justificationStatus' => $absence->getStatus(), // Statut de justification séparé
+                    'note' => method_exists($absence, 'getJustificationNote') ? $absence->getJustificationNote() : null,
+                ];
+            }, $absences);
+
+            return $this->json($data);
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Erreur lors de la récupération des absences',
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    /**
      * Enregistre l'appel (présence/absence/retard) pour une séance.
      * POST /api/prof/sessions/{id}/roll
      * Body JSON:
@@ -299,11 +376,28 @@ class ProfessorSessionController extends AbstractController
 
             // --- autres champs ---
             if ($semester && method_exists($absence, 'setSemester')) $absence->setSemester($semester);
-            if (method_exists($absence, 'setStatus'))            $absence->setStatus($status);
-            if (method_exists($absence, 'setMinutesLate'))       $absence->setMinutesLate($minutesLate);
-            if (method_exists($absence, 'setJustified'))         $absence->setJustified($justified);
+            
+            // Déterminer le statut de justification basé sur la présence
+            $justificationStatus = Absence::STATUS_UNJUSTIFIED;
+            if ($status === 'PRESENT') {
+                // Si présent, pas d'absence à justifier
+                $justificationStatus = Absence::STATUS_APPROVED;
+                $absence->setJustified(true);
+            } elseif ($justified) {
+                // Si absent/retard mais justifié
+                $justificationStatus = Absence::STATUS_APPROVED;
+                $absence->setJustified(true);
+            } else {
+                // Si absent/retard non justifié
+                $justificationStatus = Absence::STATUS_UNJUSTIFIED;
+                $absence->setJustified(false);
+            }
+            
+            if (method_exists($absence, 'setPresenceStatus')) $absence->setPresenceStatus($status);
+            if (method_exists($absence, 'setStatus')) $absence->setStatus($justificationStatus);
+            if (method_exists($absence, 'setMinutesLate')) $absence->setMinutesLate($minutesLate);
             if (method_exists($absence, 'setJustificationNote')) $absence->setJustificationNote($note);
-            if (method_exists($absence, 'setRecordedBy'))        $absence->setRecordedBy($this->getUser());
+            if (method_exists($absence, 'setRecordedBy')) $absence->setRecordedBy($this->getUser());
 
             $this->em->persist($absence);
             $processed++;
