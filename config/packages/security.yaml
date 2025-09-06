@@ -33,6 +33,7 @@ security:
   access_control:
     - { path: ^/api/login_check$,  roles: PUBLIC_ACCESS }
     - { path: ^/api/token/refresh$, roles: PUBLIC_ACCESS }
+    - { path: ^/api/test,          roles: PUBLIC_ACCESS }
     - { path: ^/api/student,          roles: ROLE_STUDENT }
     - { path: ^/api/prof,          roles: ROLE_PROFESSOR }
     - { path: ^/api/grade,         roles: ROLE_PROFESSOR }

@@ -5,10 +5,12 @@ namespace App\DataFixtures;
 use App\Entity\Absence;
 use App\Entity\Category;
 use App\Entity\Classe;
+use App\Entity\Conversation;
 use App\Entity\Course;
 use App\Entity\CourseUnit;
 use App\Entity\Grade;
 use App\Entity\Level;
+use App\Entity\Message;
 use App\Entity\Semester;
 use App\Entity\Student;
 use App\Entity\CourseSession;
@@ -396,6 +398,90 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
     }
 
 
+    private function createConversations(ObjectManager $manager, array $students, array $professors): array
+    {
+        $conversations = [];
+        
+        // Récupérer les utilisateurs des étudiants et professeurs
+        $studentUsers = [];
+        $professorUsers = [];
+        
+        foreach ($students as $student) {
+            if (method_exists($student, 'getUser') && $student->getUser()) {
+                $studentUsers[] = $student->getUser();
+            }
+        }
+        
+        foreach ($professors as $professor) {
+            if (method_exists($professor, 'getUserId') && $professor->getUserId()) {
+                $professorUsers[] = $professor->getUserId();
+            }
+        }
+        
+        if (empty($studentUsers) || empty($professorUsers)) {
+            return $conversations;
+        }
+        
+        // Conversations individuelles étudiant-professeur uniquement
+        for ($i = 0; $i < min(20, count($studentUsers)); $i++) {
+            $student = $studentUsers[$i];
+            $professor = $professorUsers[array_rand($professorUsers)];
+            
+            $conversation = new Conversation();
+            $conversation->setTitle("Discussion avec " . $professor->getName() . " " . $professor->getLastname());
+            $conversation->addParticipant($student);
+            $conversation->addParticipant($professor);
+            
+            $manager->persist($conversation);
+            $conversations[] = $conversation;
+            
+            // Ajouter quelques messages d'exemple
+            $this->addSampleMessages($manager, $conversation, [$student, $professor]);
+        }
+        
+        return $conversations;
+    }
+    
+    private function addSampleMessages(ObjectManager $manager, Conversation $conversation, array $participants): void
+    {
+        $messageTemplates = [
+            'Bonjour Professeur !',
+            'J\'ai une question sur le cours d\'aujourd\'hui',
+            'Merci pour l\'explication !',
+            'À quelle heure est le cours demain ?',
+            'J\'ai un problème avec l\'exercice...',
+            'Les notes sont disponibles sur la plateforme',
+            'Pouvez-vous m\'expliquer ce chapitre ?',
+            'Parfait, merci beaucoup !',
+            'Je vais regarder ça et je vous tiens au courant',
+            'Excellente question !',
+            'Pouvez-vous m\'envoyer le fichier du cours ?',
+            'D\'accord, on se voit demain alors',
+            'J\'ai trouvé la solution !',
+            'Pouvez-vous m\'aider avec le projet ?',
+            'Merci pour votre aide ! 🙏'
+        ];
+        
+        $nbMessages = $this->faker->numberBetween(5, 15);
+        
+        for ($i = 0; $i < $nbMessages; $i++) {
+            $message = new Message();
+            $message->setContent($this->faker->randomElement($messageTemplates));
+            $message->setSender($this->faker->randomElement($participants));
+            $message->setConversation($conversation);
+            $message->setIsRead($this->faker->boolean(70)); // 70% de chance d'être lu
+            
+            // Décaler les dates pour simuler une conversation sur plusieurs jours
+            $createdAt = new \DateTime();
+            $createdAt->modify('-' . $this->faker->numberBetween(0, 7) . ' days');
+            $createdAt->modify('-' . $this->faker->numberBetween(0, 23) . ' hours');
+            $createdAt->modify('-' . $this->faker->numberBetween(0, 59) . ' minutes');
+            $message->setCreatedAt($createdAt);
+            
+            $manager->persist($message);
+        }
+    }
+
     private function createAbsences(ObjectManager $manager, array $students, array $semesters): void
     {
         $tzName      = \date_default_timezone_get();
@@ -461,7 +547,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
             foreach ($intervals as [$start, $end]) {
                 $session = null;
                 if ($classeId && !empty($sessionsByClasseId[$classeId])) {
-                    // priorité: séance qui chevauche l’intervalle le même jour
+                    // priorité: séance qui chevauche l'intervalle le même jour
                     foreach ($sessionsByClasseId[$classeId] as $s) {
                         $sStart = method_exists($s, 'getStartAt') ? $s->getStartAt() : null;
                         $sEnd   = method_exists($s, 'getEndAt')   ? $s->getEndAt()   : null;
@@ -482,7 +568,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                     continue;
                 }
 
-                // Aligne l’absence sur l’horaire de la séance + convertit en \DateTime (mutable)
+                // Aligne l'absence sur l'horaire de la séance + convertit en \DateTime (mutable)
                 $sStart = method_exists($session, 'getStartAt') ? $session->getStartAt() : null;
                 $sEnd   = method_exists($session, 'getEndAt')   ? $session->getEndAt()   : null;
                 if (!$sStart || !$sEnd) continue;
@@ -523,7 +609,7 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
                     $semester = $semesters[array_rand($semesters)];
                 }
 
-                // Création de l’absence
+                // Création de l'absence
                 $absence = new Absence();
                 $absence->setStudent($student);
                 $absence->setCourseSession($session);
@@ -875,6 +961,9 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
         $this->createGrades($manager, $students, $courses);
         $this->createAbsences($manager, $students, $semesters);
+        
+        // Créer les conversations de test
+        $conversations = $this->createConversations($manager, $students, $professors);
 
         $manager->flush();
     }
