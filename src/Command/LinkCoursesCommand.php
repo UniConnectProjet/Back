@@ -27,15 +27,15 @@ class LinkCoursesCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
         
-        $io->title('🔗 Liaison des cours aux professeurs');
+        $io->title('Liaison des cours aux professeurs');
         
         // Récupérer les professeurs
         $professors = $this->em->getRepository(Professor::class)->findAll();
-        $io->info(sprintf('📚 Professeurs trouvés : %d', count($professors)));
+        $io->info(sprintf('Professeurs trouvés : %d', count($professors)));
         
         // Récupérer les cours
         $courses = $this->em->getRepository(Course::class)->findAll();
-        $io->info(sprintf('📖 Cours trouvés : %d', count($courses)));
+        $io->info(sprintf('Cours trouvés : %d', count($courses)));
         
         if (empty($professors) || empty($courses)) {
             $io->error('Aucun professeur ou cours trouvé !');
@@ -54,7 +54,7 @@ class LinkCoursesCommand extends Command
         foreach ($assignments as $professorIndex => $courseIndices) {
             if (isset($professors[$professorIndex])) {
                 $professor = $professors[$professorIndex];
-                $io->section(sprintf('👨‍🏫 Professeur %d', $professor->getId()));
+                $io->section(sprintf('Professeurs %d', $professor->getId()));
                 
                 foreach ($courseIndices as $courseIndex) {
                     if (isset($courses[$courseIndex])) {
@@ -76,10 +76,10 @@ class LinkCoursesCommand extends Command
         // Sauvegarder les changements
         $this->em->flush();
         
-        $io->success(sprintf('🎉 %d liaisons créées avec succès !', $totalLinked));
+        $io->success(sprintf('%d liaisons créées avec succès !', $totalLinked));
         
         // Afficher un résumé
-        $io->section('📊 Résumé des liaisons');
+        $io->section('Résumé des liaisons');
         $summary = $this->em->getRepository(Professor::class)
             ->createQueryBuilder('p')
             ->select('p.id, u.name, u.lastname, COUNT(c.id) as courseCount')
@@ -91,7 +91,7 @@ class LinkCoursesCommand extends Command
             ->getResult();
         
         foreach ($summary as $row) {
-            $io->text(sprintf('  👨‍🏫 %s %s (ID: %d) : %d cours', 
+            $io->text(sprintf('  %s %s (ID: %d) : %d cours', 
                 $row['name'], $row['lastname'], $row['id'], $row['courseCount']));
         }
         
