@@ -19,8 +19,7 @@ class CourseRepository extends ServiceEntityRepository
     public function findByStudentId(int $studentId): array
     {
         return $this->createQueryBuilder('c')
-            ->join('c.class_id', 'cl')
-            ->join('cl.students', 's')
+            ->join('c.students', 's')
             ->where('s.id = :studentId')
             ->setParameter('studentId', $studentId)
             ->getQuery()

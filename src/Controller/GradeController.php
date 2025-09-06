@@ -63,7 +63,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/course/{courseId}', name: 'grade.getByCourse', methods:['GET'])]
+    #[Route('/by-course/{courseId}', name: 'grade.getByCourse', methods:['GET'])]
     public function getGradesByCourseId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -80,7 +80,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/semester/{semesterId}', name: 'grade.getBySemester', methods:['GET'])]
+    #[Route('/by-semester/{semesterId}', name: 'grade.getBySemester', methods:['GET'])]
     public function getGradesBySemesterId(
         GradeRepository $repository,
         SerializerInterface $serializer,

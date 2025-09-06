@@ -23,7 +23,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[Route('/api')]
 class StudentController extends AbstractController
 {
-    private const ROUTE_FOR_A_STUDENT = '/api/students/{id}';
+    private const ROUTE_FOR_A_STUDENT = '/students/{id}';
     private StudentRepository $repository;
     private SerializerInterface $serializer;
 

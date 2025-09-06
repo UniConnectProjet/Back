@@ -624,16 +624,16 @@ class ProfessorSessionController extends AbstractController
         ]);
     }
 
-    #[Route('/roll/save', name: 'prof_save_roll', methods: ['POST'])]
-    public function saveRoll(Request $request): JsonResponse
+    #[Route('/sessions/{id}/roll', name: 'prof_save_roll', methods: ['POST'])]
+    public function saveRoll(Request $request, int $id): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
 
-        if (!isset($data['sessionId']) || !isset($data['attendances'])) {
+        if (!isset($data['attendances'])) {
             return $this->json(['error' => 'Données manquantes'], 400);
         }
 
-        $sessionId = $data['sessionId'];
+        $sessionId = $id;
         $attendances = $data['attendances'];
 
         try {

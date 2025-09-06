@@ -28,8 +28,8 @@ final class MeController extends AbstractController
         $login = $email && str_contains($email, '@') ? explode('@', $email)[0] : 'user';
 
         // Tes champs sur User
-        $name     = method_exists($user, 'getName')     ? $user->getName()     : null;
-        $lastname = method_exists($user, 'getLastname') ? $user->getLastname() : null;
+        $name     = $user->getName();
+        $lastname = $user->getLastname();
 
         // Fallback via Student/Professor si besoin
         if ((!$name || !$lastname) && method_exists($user, 'getStudent') && $user->getStudent()) {
@@ -50,60 +50,12 @@ final class MeController extends AbstractController
             'id'          => method_exists($user, 'getId') ? $user->getId() : null,
             'email'       => $email,
             'roles'       => method_exists($user, 'getRoles') ? $user->getRoles() : [],
-            'name'        => $name,       // prénom
-            'lastname'    => $lastname,   // nom
+            'name'        => $name ?? null,       // prénom
+            'lastname'    => $lastname ?? null,   // nom
             'fullName'    => $fullName !== '' ? $fullName : null,
             'displayName' => $displayName,
         ]);
     }
 
-    #[Route('/me/grades', name: 'api_me_grades', methods: ['GET'])]
-    #[IsGranted('IS_AUTHENTICATED_FULLY')]
-    public function getMyGrades(Security $security): JsonResponse
-    {
-        $user = $security->getUser();
-        if (!$user) {
-            return $this->json(['message' => 'Unauthorized'], 401);
-        }
-
-        // Récupérer l'étudiant associé à l'utilisateur
-        $student = $this->em->getRepository(\App\Entity\Student::class)
-            ->findOneBy(['user' => $user]);
-
-        if (!$student) {
-            return $this->json(['message' => 'Utilisateur non trouvé comme étudiant'], 404);
-        }
-
-        // Récupérer les notes de l'étudiant
-        $grades = $this->em->getRepository(\App\Entity\Grade::class)
-            ->createQueryBuilder('g')
-            ->select('g.title, g.grade as score, g.dividor as outOf, c.name as courseName')
-            ->leftJoin('g.course', 'c')
-            ->where('g.student = :student')
-            ->setParameter('student', $student)
-            ->orderBy('g.id', 'DESC')
-            ->getQuery()
-            ->getResult();
-
-        // Formater les notes pour l'interface
-        $formattedGrades = array_map(function($grade) {
-            return [
-                'title' => $grade['title'],
-                'score' => $grade['score'],
-                'total' => $grade['outOf'],
-                'courseName' => $grade['courseName']
-            ];
-        }, $grades);
-
-        return $this->json([
-            'student' => [
-                'id' => $student->getId(),
-                'name' => $user->getName(),
-                'lastname' => $user->getLastname(),
-                'email' => $user->getEmail()
-            ],
-            'grades' => $formattedGrades
-        ]);
-    }
 
 }
