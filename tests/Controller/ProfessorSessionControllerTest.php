@@ -2,7 +2,7 @@
 
 namespace App\Tests\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use App\Tests\AbstractApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\User;
 use App\Entity\Professor;
@@ -15,7 +15,7 @@ use App\Entity\Course;
 use App\Entity\Student;
 use App\Entity\CourseSession;
 
-final class ProfessorSessionControllerTest extends WebTestCase
+final class ProfessorSessionControllerTest extends AbstractApiTestCase
 {
     /** Petit helper pour générer des emails uniques par test */
     private function uniq(string $prefix): string
@@ -142,52 +142,43 @@ final class ProfessorSessionControllerTest extends WebTestCase
 
     public function testRosterReturnsStudentsOfClass(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
-        $data   = $this->seed($em);
+        $data = $this->seed($this->em);
 
         // authentification du prof
-        $client->loginUser($data['profUser']);
+        $this->client->loginUser($data['profUser']);
 
-        $client->request('GET', '/api/prof/sessions/'.$data['session']->getId().'/roster');
-        self::assertResponseIsSuccessful();
+        $this->client->request('GET', '/api/prof/sessions/'.$data['session']->getId().'/roster');
+        $this->assertResponseIsSuccessful();
 
-        $json = json_decode($client->getResponse()->getContent(), true);
-        self::assertSame($data['classe']->getId(), $json['classeId']);
-        self::assertCount(count($data['students']), $json['students']);
+        $json = $this->decodeJson();
+        $this->assertSame($data['classe']->getId(), $json['classeId']);
+        $this->assertCount(count($data['students']), $json['students']);
     }
 
     public function testListSessionsWithStudentCount(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
-        $data   = $this->seed($em);
+        $data = $this->seed($this->em);
 
-        $client->loginUser($data['profUser']);
+        $this->client->loginUser($data['profUser']);
 
-        $client->request('GET', '/api/prof/sessions/with-students');
-        self::assertResponseIsSuccessful();
+        $this->client->request('GET', '/api/prof/sessions/with-students');
+        $this->assertResponseIsSuccessful();
 
-        $arr = json_decode($client->getResponse()->getContent(), true);
-        self::assertNotEmpty($arr);
+        $arr = $this->decodeJson();
+        $this->assertNotEmpty($arr);
 
         $found = array_filter($arr, fn($r) => $r['sessionId'] === $data['session']->getId());
-        self::assertNotEmpty($found);
+        $this->assertNotEmpty($found);
 
         $row = array_values($found)[0];
-        self::assertSame(count($data['students']), $row['studentCount']);
+        $this->assertSame(count($data['students']), $row['studentCount']);
     }
 
     public function testSaveRollCreatesAbsence(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
-        $data   = $this->seed($em);
+        $data = $this->seed($this->em);
 
-        $client->loginUser($data['profUser']);
+        $this->client->loginUser($data['profUser']);
 
         $payload = [
             'attendances' => [[
@@ -199,26 +190,22 @@ final class ProfessorSessionControllerTest extends WebTestCase
             ]],
         ];
 
-        $client->request(
+        $this->jsonRequest(
             'POST',
             '/api/prof/sessions/'.$data['session']->getId().'/roll',
-            server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode($payload)
+            $payload
         );
 
-        self::assertResponseIsSuccessful();
-        $res = json_decode($client->getResponse()->getContent(), true);
-        self::assertSame(1, $res['processed'] ?? null);
+        $this->assertResponseIsSuccessful();
+        $res = $this->decodeJson();
+        $this->assertSame(1, $res['processed'] ?? null);
     }
 
     public function testSaveRollForbiddenForOtherProfessor(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
-        $data   = $this->seed($em);
+        $data = $this->seed($this->em);
 
-        $client->loginUser($data['otherProfUser']);
+        $this->client->loginUser($data['otherProfUser']);
 
         $payload = [
             'attendances' => [[
@@ -230,13 +217,12 @@ final class ProfessorSessionControllerTest extends WebTestCase
             ]],
         ];
 
-        $client->request(
+        $this->jsonRequest(
             'POST',
             '/api/prof/sessions/'.$data['session']->getId().'/roll',
-            server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode($payload)
+            $payload
         );
 
-        self::assertResponseStatusCodeSame(403);
+        $this->assertResponseStatusCodeSame(403);
     }
 }

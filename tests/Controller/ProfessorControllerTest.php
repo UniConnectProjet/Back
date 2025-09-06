@@ -1,12 +1,12 @@
 <?php
 namespace App\Tests\Controller;
 
-use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use App\Tests\AbstractApiTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\User;
 use App\Entity\Professor;
 
-final class ProfessorControllerTest extends WebTestCase
+final class ProfessorControllerTest extends AbstractApiTestCase
 {
     /** Génère un email unique pour éviter les collisions UNIQ_IDENTIFIER_EMAIL */
     private function uniq(string $prefix): string
@@ -46,134 +46,108 @@ final class ProfessorControllerTest extends WebTestCase
 
     public function testIndexAsAdminListsProfessors(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
+        $admin = $this->makeUser($this->em, 'admin', ['ROLE_ADMIN']);
+        $u1 = $this->makeUser($this->em, 'profA', ['ROLE_PROFESSOR']);
+        $u2 = $this->makeUser($this->em, 'profB', ['ROLE_PROFESSOR']);
+        $this->makeProfessor($this->em, $u1);
+        $this->makeProfessor($this->em, $u2);
+        $this->em->flush();
 
-        $admin = $this->makeUser($em, 'admin', ['ROLE_ADMIN']);
-        $u1 = $this->makeUser($em, 'profA', ['ROLE_PROFESSOR']);
-        $u2 = $this->makeUser($em, 'profB', ['ROLE_PROFESSOR']);
-        $this->makeProfessor($em, $u1);
-        $this->makeProfessor($em, $u2);
-        $em->flush();
+        $this->client->loginUser($admin);
+        $this->client->request('GET', '/api/professors');
 
-        $client->loginUser($admin);
-        $client->request('GET', '/api/professors');
-
-        self::assertResponseIsSuccessful();
-        $list = json_decode($client->getResponse()->getContent(), true);
-        self::assertIsArray($list);
-        self::assertGreaterThanOrEqual(2, count($list));
+        $this->assertResponseIsSuccessful();
+        $list = $this->decodeJson();
+        $this->assertIsArray($list);
+        $this->assertGreaterThanOrEqual(2, count($list));
     }
 
     public function testShowAsOwnerIsAllowed(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
+        $profUser = $this->makeUser($this->em, 'owner', ['ROLE_PROFESSOR']);
+        $prof     = $this->makeProfessor($this->em, $profUser);
+        $this->em->flush();
 
-        $profUser = $this->makeUser($em, 'owner', ['ROLE_PROFESSOR']);
-        $prof     = $this->makeProfessor($em, $profUser);
-        $em->flush();
-
-        $client->loginUser($profUser);
-        $client->request('GET', '/api/professors/'.$prof->getId());
+        $this->client->loginUser($profUser);
+        $this->client->request('GET', '/api/professors/'.$prof->getId());
 
         // Le contrôleur autorise ADMIN ou le "owner" (prof lié) → 200 attendu
-        self::assertResponseIsSuccessful();
-        $data = json_decode($client->getResponse()->getContent(), true);
-        self::assertSame($prof->getId(), $data['id'] ?? null);
+        $this->assertResponseIsSuccessful();
+        $data = $this->decodeJson();
+        $this->assertSame($prof->getId(), $data['id'] ?? null);
     }
 
     public function testCreateAsAdmin(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
+        $admin   = $this->makeUser($this->em, 'admin2', ['ROLE_ADMIN']);
+        $newUser = $this->makeUser($this->em, 'newProf', ['ROLE_PROFESSOR']);
+        $this->em->flush();
 
-        $admin   = $this->makeUser($em, 'admin2', ['ROLE_ADMIN']);
-        $newUser = $this->makeUser($em, 'newProf', ['ROLE_PROFESSOR']);
-        $em->flush();
-
-        $client->loginUser($admin);
+        $this->client->loginUser($admin);
         $payload = [
             'userId' => $newUser->getId(),
             'weeklyAvailability' => ['TUE' => [['10:00','12:00']]],
         ];
-        $client->request(
-            'POST',
-            '/api/professors',
-            server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode($payload)
-        );
+        $this->jsonRequest('POST', '/api/professors', $payload);
 
-        self::assertResponseIsSuccessful();
-        $data = json_decode($client->getResponse()->getContent(), true);
-        self::assertNotEmpty($data['id'] ?? null);
+        $this->assertResponseIsSuccessful();
+        $data = $this->decodeJson();
+        $this->assertNotEmpty($data['id'] ?? null);
 
         // Vérifie que le Professor est bien créé en base
-        $created = $em->getRepository(Professor::class)->find($data['id']);
-        self::assertNotNull($created);
+        $created = $this->em->getRepository(Professor::class)->find($data['id']);
+        $this->assertNotNull($created);
     }
 
     public function testUpdateWeeklyAvailabilityAsOwner(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
+        $profUser = $this->makeUser($this->em, 'owner2', ['ROLE_PROFESSOR']);
+        $prof     = $this->makeProfessor($this->em, $profUser);
+        $this->em->flush();
 
-        $profUser = $this->makeUser($em, 'owner2', ['ROLE_PROFESSOR']);
-        $prof     = $this->makeProfessor($em, $profUser);
-        $em->flush();
-
-        $client->loginUser($profUser);
+        $this->client->loginUser($profUser);
         $payload = [
             'weeklyAvailability' => [
                 'WED' => [['09:00','11:00'], ['14:00','16:00']],
             ],
         ];
 
-        $client->request(
+        $this->jsonRequest(
             'PUT',
             '/api/professors/'.$prof->getId(),
-            server: ['CONTENT_TYPE' => 'application/json'],
-            content: json_encode($payload)
+            $payload
         );
 
-        self::assertResponseIsSuccessful();
-        $data = json_decode($client->getResponse()->getContent(), true);
-        self::assertArrayHasKey('weeklyAvailability', $data);
-        self::assertArrayHasKey('WED', $data['weeklyAvailability']);
+        $this->assertResponseIsSuccessful();
+        $data = $this->decodeJson();
+        $this->assertArrayHasKey('weeklyAvailability', $data);
+        $this->assertArrayHasKey('WED', $data['weeklyAvailability']);
     }
 
     public function testDeleteAsAdmin(): void
     {
-        static::ensureKernelShutdown();
-        $client = static::createClient();
-        $em     = static::getContainer()->get(EntityManagerInterface::class);
-
-        $admin = $this->makeUser($em, 'admin3', ['ROLE_ADMIN']);
-        $u     = $this->makeUser($em, 'toDelete', ['ROLE_PROFESSOR']);
-        $prof  = $this->makeProfessor($em, $u);
-        $em->flush();
+        $admin = $this->makeUser($this->em, 'admin3', ['ROLE_ADMIN']);
+        $u     = $this->makeUser($this->em, 'toDelete', ['ROLE_PROFESSOR']);
+        $prof  = $this->makeProfessor($this->em, $u);
+        $this->em->flush();
 
         // capture l'ID avant le DELETE
         $id = $prof->getId();
 
-        $client->loginUser($admin);
-        $client->request('DELETE', '/api/professors/'.$id);
+        $this->client->loginUser($admin);
+        $this->client->request('DELETE', '/api/professors/'.$id);
 
-        self::assertResponseIsSuccessful();
+        $this->assertResponseIsSuccessful();
 
         // purge le contexte pour éviter les états Doctrine incohérents
-        $em->clear();
+        $this->em->clear();
 
         // vérifie que l'entité n'existe plus
-        $deleted = $em->getRepository(Professor::class)->find($id);
-        self::assertNull($deleted);
+        $deleted = $this->em->getRepository(Professor::class)->find($id);
+        $this->assertNull($deleted);
 
         // (optionnel) vérifie la réponse JSON du contrôleur
-        $payload = json_decode($client->getResponse()->getContent(), true);
+        $payload = $this->decodeJson();
         self::assertTrue($payload['deleted'] ?? false);
     }
 

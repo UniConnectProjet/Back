@@ -33,7 +33,7 @@ class CourseUnitControllerTest extends AbstractApiTestCase
     {
         $this->authenticate();
         $this->client->request('GET', '/api/course/units/student/999999');
-        $this->assertContains($this->client->getResponse()->getStatusCode(), [Response::HTTP_OK, Response::HTTP_NOT_FOUND]);
+        $this->assertTrue(in_array($this->client->getResponse()->getStatusCode(), [Response::HTTP_OK, Response::HTTP_NOT_FOUND]));
     }
 
     public function test_add_course_to_unknown_course_unit_returns_404(): void

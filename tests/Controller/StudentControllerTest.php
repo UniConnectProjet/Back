@@ -20,19 +20,19 @@ class StudentControllerTest extends AbstractApiTestCase
     public function test_me_student_requires_auth(): void
     {
         $this->client->request('GET', '/api/me/student');
-        $this->assertContains($this->client->getResponse()->getStatusCode(), [401, 403]);
+        $this->assertTrue(in_array($this->client->getResponse()->getStatusCode(), [401, 403]));
     }
 
     public function test_me_grades_requires_auth(): void
     {
         $this->client->request('GET', '/api/me/grades');
-        $this->assertContains($this->client->getResponse()->getStatusCode(), [401, 403]);
+        $this->assertTrue(in_array($this->client->getResponse()->getStatusCode(), [401, 403]));
     }
 
     public function test_me_semesters_absences_requires_auth(): void
     {
         $this->client->request('GET', '/api/me/semesters/absences');
-        $this->assertContains($this->client->getResponse()->getStatusCode(), [401, 403]);
+        $this->assertTrue(in_array($this->client->getResponse()->getStatusCode(), [401, 403]));
     }
 
     public function test_get_student_absences_not_found(): void

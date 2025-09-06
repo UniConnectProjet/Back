@@ -43,7 +43,7 @@ abstract class AbstractApiTestCase extends WebTestCase {
     
     protected function authenticate(): void
     {
-        $email = $this->getCredentials()['username'] ?? 'test@example.com';
+        $email = $this->getCredentials()['email'] ?? 'test@example.com';
 
         $user = $this->em->getRepository(\App\Entity\User::class)
             ->findOneBy(['email' => $email]);

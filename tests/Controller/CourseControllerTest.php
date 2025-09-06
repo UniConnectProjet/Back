@@ -19,14 +19,14 @@ class CourseControllerTest extends AbstractApiTestCase
     {
         $this->authenticate();
         $this->client->request('GET', '/api/courses/student/999999');
-        $this->assertContains($this->client->getResponse()->getStatusCode(), [Response::HTTP_OK, Response::HTTP_NOT_FOUND]);
+        $this->assertTrue(in_array($this->client->getResponse()->getStatusCode(), [Response::HTTP_OK, Response::HTTP_NOT_FOUND]));
     }
 
     public function test_get_courses_by_course_unit_returns_200_or_404(): void
     {
         $this->authenticate();
         $this->client->request('GET', '/api/courses/courseUnit/999999');
-        $this->assertContains($this->client->getResponse()->getStatusCode(), [Response::HTTP_OK, Response::HTTP_NOT_FOUND]);
+        $this->assertTrue(in_array($this->client->getResponse()->getStatusCode(), [Response::HTTP_OK, Response::HTTP_NOT_FOUND]));
     }
 
     public function test_update_unknown_course_returns_404(): void

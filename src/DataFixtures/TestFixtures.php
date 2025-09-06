@@ -19,6 +19,7 @@ use App\Entity\Grade;
 use App\Entity\Absence;
 use App\Entity\CourseSession;
 use App\Entity\Professor;
+
 // Lancer les fixtures avec `php bin/console doctrine:fixtures:load --env=test --group=test --no-interaction`
 final class TestFixtures extends Fixture implements FixtureGroupInterface
 {
@@ -36,9 +37,9 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $admin->setEmail('admin@example.com');
         $admin->setRoles(['ROLE_ADMIN']);
         $admin->setPassword($this->hasher->hashPassword($admin, 'admin'));
-        $admin->setName('Test');
+        $admin->setName('Admin');
         $admin->setLastname('User');
-        $admin->setBirthday(new \DateTime('2000-01-01')); // facultatif, mais utile pour les tests
+        $admin->setBirthday(new \DateTime('2000-01-01'));
         $em->persist($admin);
 
         // User "prof"
@@ -46,9 +47,9 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $profUser->setEmail('prof@example.com');
         $profUser->setRoles(['ROLE_PROFESSOR']);
         $profUser->setPassword($this->hasher->hashPassword($profUser, 'prof'));
-        $profUser->setName('Test');
+        $profUser->setName('Prof');
         $profUser->setLastname('User');
-        $profUser->setBirthday(new \DateTime('2000-01-01'));
+        $profUser->setBirthday(new \DateTime('1980-01-01'));
         $em->persist($profUser);
 
         // Professor lié au User
@@ -70,14 +71,43 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         }
         $em->persist($professor);
 
+        // User "test" (étudiant)
         $test = new User();
         $test->setEmail('test@example.com');
-        $test->setRoles(['ROLE_USER','ROLE_ADMIN']); // utile pour les tests
+        $test->setRoles(['ROLE_STUDENT']);
         $test->setName('Test');
-        $test->setLastname('User');
+        $test->setLastname('Student');
         $test->setPassword($this->hasher->hashPassword($test, 'test'));
-        $test->setBirthday(new \DateTime('2000-01-01'));
+        $test->setBirthday(new \DateTime('2002-01-01'));
         $em->persist($test);
+
+        // User "student2" (autre étudiant)
+        $student2 = new User();
+        $student2->setEmail('student2@example.com');
+        $student2->setRoles(['ROLE_STUDENT']);
+        $student2->setName('Student');
+        $student2->setLastname('Two');
+        $student2->setPassword($this->hasher->hashPassword($student2, 'student2'));
+        $student2->setBirthday(new \DateTime('2002-05-15'));
+        $em->persist($student2);
+
+        // User "prof2" (autre professeur)
+        $prof2User = new User();
+        $prof2User->setEmail('prof2@example.com');
+        $prof2User->setRoles(['ROLE_PROFESSOR']);
+        $prof2User->setPassword($this->hasher->hashPassword($prof2User, 'prof2'));
+        $prof2User->setName('Prof');
+        $prof2User->setLastname('Two');
+        $prof2User->setBirthday(new \DateTime('1975-03-20'));
+        $em->persist($prof2User);
+
+        // Professor 2 lié au User
+        $professor2 = new Professor();
+        $professor2->setUserId($prof2User);
+        if (method_exists($professor2, 'setIsActive')) {
+            $professor2->setIsActive(true);
+        }
+        $em->persist($professor2);
 
         // ========= Taxonomie =========
         $category = new Category();
@@ -93,7 +123,7 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
 
         $classe = new Classe();
         $classe->setName('A1');
-        // D’après ton entité, le setter est bien setLevelId(?Level)
+        // D'après ton entité, le setter est bien setLevelId(?Level)
         $classe->setLevelId($level);
         $classe->setCategory($category);
         $em->persist($classe);
@@ -101,7 +131,7 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         // ========= Semestre =========
         $semester = new Semester();
         $semester->setName('S1');
-        // Tes setters prennent \DateTimeInterface ; pour éviter l’ancien warning DBAL sur "date" on met \DateTime (mutable)
+        // Tes setters prennent \DateTimeInterface ; pour éviter l'ancien warning DBAL sur "date" on met \DateTime (mutable)
         $semester->setStartDate(new \DateTime('2024-09-01'));
         $semester->setEndDate(new \DateTime('2025-01-15'));
         $em->persist($semester);
@@ -134,20 +164,24 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
             $course->addClass($classe);
         }
 
-        // ========= Étudiant =========
+        // ========= Étudiants =========
         $student = new Student();
         $student->setClasse($classe);
         $student->setUser($test);
-        $student->getSemesters($semester);
-        // côté inverse géré par User::setStudent(), mais on force la cohérence si besoin :
-        $test->setStudent($student);
-        $em->persist($student);
-
         if (method_exists($student, 'addSemester')) {
             $student->addSemester($semester);
         }
+        $em->persist($student);
 
-        // ========= Note =========
+        $student2Entity = new Student();
+        $student2Entity->setClasse($classe);
+        $student2Entity->setUser($student2);
+        if (method_exists($student2Entity, 'addSemester')) {
+            $student2Entity->addSemester($semester);
+        }
+        $em->persist($student2Entity);
+
+        // ========= Notes =========
         $grade = new Grade();
         $grade->setTitle('Interro 1');
         $grade->setGrade(15.5);
@@ -156,16 +190,15 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $grade->setCourse($course);
         $em->persist($grade);
 
-        // ========= Absence =========
-        $absence = new Absence();
-        $absence->setStudent($student);
-        $absence->setSemester($semester);
-        $absence->setStartedDate(new \DateTime('2024-10-10 09:00:00'));
-        $absence->setEndedDate(new \DateTime('2024-10-10 12:00:00'));
-        $absence->setJustified(false);
-        $absence->setJustification('Non justifiée');
-        $em->persist($absence);
+        $grade2 = new Grade();
+        $grade2->setTitle('TP 1');
+        $grade2->setGrade(12.0);
+        $grade2->setDividor(20);
+        $grade2->setStudent($student2Entity);
+        $grade2->setCourse($course);
+        $em->persist($grade2);
 
+        // ========= Sessions de cours =========
         $session = new CourseSession();
         $session->setCourse($course);
         $session->setClasse($classe);
@@ -175,8 +208,44 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $session->setEndAt(new \DateTimeImmutable('2024-10-11 12:00:00'));
         $em->persist($session);
 
+        $session2 = new CourseSession();
+        $session2->setCourse($course);
+        $session2->setClasse($classe);
+        $session2->setProfessor($professor2);
+        $session2->setRoom('A101');
+        $session2->setStartAt(new \DateTimeImmutable('2024-10-12 14:00:00'));
+        $session2->setEndAt(new \DateTimeImmutable('2024-10-12 16:00:00'));
+        $em->persist($session2);
+
+        // ========= Absences =========
+        $absence = new Absence();
+        $absence->setStudent($student);
+        $absence->setSemester($semester);
+        $absence->setStartedDate(new \DateTime('2024-10-10 09:00:00'));
+        $absence->setEndedDate(new \DateTime('2024-10-10 12:00:00'));
+        $absence->setJustified(false);
+        $absence->setJustification('Non justifiée');
         if (method_exists($absence, 'setCourseSession')) {
             $absence->setCourseSession($session);
+        }
+        $em->persist($absence);
+
+        $absence2 = new Absence();
+        $absence2->setStudent($student2Entity);
+        $absence2->setSemester($semester);
+        $absence2->setStartedDate(new \DateTime('2024-10-12 14:00:00'));
+        $absence2->setEndedDate(new \DateTime('2024-10-12 16:00:00'));
+        $absence2->setJustified(true);
+        $absence2->setJustification('Maladie');
+        if (method_exists($absence2, 'setCourseSession')) {
+            $absence2->setCourseSession($session2);
+        }
+        $em->persist($absence2);
+
+        // ========= Liaisons Professor-Course =========
+        if (method_exists($course, 'addProfessor')) {
+            $course->addProfessor($professor);
+            $course->addProfessor($professor2);
         }
 
         $em->flush();
