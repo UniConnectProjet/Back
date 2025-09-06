@@ -30,7 +30,7 @@ class ProfessorController extends AbstractController
         return $this->isGranted('ROLE_ADMIN') || $this->isOwner($prof);
     }
 
-    #[Route('/me/professor', name: 'professor.me', methods: ['GET'])]
+    #[Route('/me', name: 'professor.me', methods: ['GET'])]
     public function getMyProfessor(ProfessorRepository $repo): JsonResponse
     {
         $user = $this->getUser();

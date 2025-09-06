@@ -14,6 +14,13 @@
 /config/jwt/*.pem
 ###< lexik/jwt-authentication-bundle ###
 
+###> Security files ###
+cookies.txt
+*.b64.txt
+private.*
+public.*
+###< Security files ###
+
 ###> phpunit/phpunit ###
 /phpunit.xml
 .phpunit.result.cache

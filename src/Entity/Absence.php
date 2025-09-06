@@ -15,6 +15,11 @@ class Absence
     public const STATUS_PENDING     = 'PENDING';     // déposée, en attente admin
     public const STATUS_APPROVED    = 'APPROVED';    // acceptée par admin
     public const STATUS_REJECTED    = 'REJECTED';    // rejetée par admin
+    
+    // Statuts de présence
+    public const STATUS_PRESENT = 'PRESENT';         // présent
+    public const STATUS_ABSENT  = 'ABSENT';          // absent
+    public const STATUS_LATE    = 'LATE';            // en retard
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -79,6 +84,22 @@ class Absence
 
     #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
     private ?\App\Entity\User $reviewedBy = null;
+
+    // --- Champs pour l'appel ---
+    #[ORM\Column(type: Types::STRING, length: 20, nullable: true)]
+    #[Groups(['getAllAbsences', 'getAllStudents', 'getStudentAbsences'])]
+    private ?string $presenceStatus = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    #[Groups(['getAllAbsences', 'getAllStudents', 'getStudentAbsences'])]
+    private ?int $minutesLate = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Groups(['getAllAbsences', 'getAllStudents', 'getStudentAbsences'])]
+    private ?string $justificationNote = null;
+
+    #[ORM\ManyToOne(targetEntity: \App\Entity\User::class)]
+    private ?\App\Entity\User $recordedBy = null;
 
 
     public function getId(): ?int
@@ -260,6 +281,50 @@ class Absence
     public function setJustifiedBy(?\App\Entity\User $by): static
     {
         $this->justifiedBy = $by;
+        return $this;
+    }
+
+    public function getMinutesLate(): ?int
+    {
+        return $this->minutesLate;
+    }
+
+    public function setMinutesLate(?int $minutesLate): static
+    {
+        $this->minutesLate = $minutesLate;
+        return $this;
+    }
+
+    public function getJustificationNote(): ?string
+    {
+        return $this->justificationNote;
+    }
+
+    public function setJustificationNote(?string $justificationNote): static
+    {
+        $this->justificationNote = $justificationNote;
+        return $this;
+    }
+
+    public function getRecordedBy(): ?\App\Entity\User
+    {
+        return $this->recordedBy;
+    }
+
+    public function setRecordedBy(?\App\Entity\User $recordedBy): static
+    {
+        $this->recordedBy = $recordedBy;
+        return $this;
+    }
+
+    public function getPresenceStatus(): ?string
+    {
+        return $this->presenceStatus;
+    }
+
+    public function setPresenceStatus(?string $presenceStatus): static
+    {
+        $this->presenceStatus = $presenceStatus;
         return $this;
     }
 }

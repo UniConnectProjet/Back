@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Auto-generated Migration: Please modify to your needs!
  */
-final class Version20250829092351 extends AbstractMigration
+final class Version20250905121631 extends AbstractMigration
 {
     public function getDescription(): string
     {
@@ -20,7 +20,7 @@ final class Version20250829092351 extends AbstractMigration
     public function up(Schema $schema): void
     {
         // this up() migration is auto-generated, please modify it to your needs
-        $this->addSql('CREATE TABLE absence (id INT AUTO_INCREMENT NOT NULL, started_date DATETIME NOT NULL, ended_date DATETIME NOT NULL, justified TINYINT(1) NOT NULL, justification VARCHAR(255) DEFAULT NULL, student_id INT DEFAULT NULL, semester_id INT DEFAULT NULL, course_session_id INT NOT NULL, INDEX IDX_765AE0C9CB944F1A (student_id), INDEX IDX_765AE0C94A798B6F (semester_id), INDEX IDX_765AE0C9BEDDA25C (course_session_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
+        $this->addSql('CREATE TABLE absence (id INT AUTO_INCREMENT NOT NULL, started_date DATETIME NOT NULL, ended_date DATETIME NOT NULL, justified TINYINT(1) NOT NULL, justification VARCHAR(255) DEFAULT NULL, status VARCHAR(20) DEFAULT \'UNJUSTIFIED\' NOT NULL, justification_reason VARCHAR(100) DEFAULT NULL, justification_comment LONGTEXT DEFAULT NULL, justification_files JSON DEFAULT NULL, justified_at DATETIME DEFAULT NULL, review_comment LONGTEXT DEFAULT NULL, reviewed_at DATETIME DEFAULT NULL, presence_status VARCHAR(20) DEFAULT NULL, minutes_late INT DEFAULT NULL, justification_note LONGTEXT DEFAULT NULL, student_id INT DEFAULT NULL, semester_id INT DEFAULT NULL, course_session_id INT NOT NULL, justified_by_id INT DEFAULT NULL, reviewed_by_id INT DEFAULT NULL, recorded_by_id INT DEFAULT NULL, INDEX IDX_765AE0C9CB944F1A (student_id), INDEX IDX_765AE0C94A798B6F (semester_id), INDEX IDX_765AE0C9BEDDA25C (course_session_id), INDEX IDX_765AE0C9CD130C9C (justified_by_id), INDEX IDX_765AE0C9FC6B21F1 (reviewed_by_id), INDEX IDX_765AE0C9D05A957B (recorded_by_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE category (id INT AUTO_INCREMENT NOT NULL, name VARCHAR(255) NOT NULL, PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE category_level (category_id INT NOT NULL, level_id INT NOT NULL, INDEX IDX_72D9835A12469DE2 (category_id), INDEX IDX_72D9835A5FB14BA7 (level_id), PRIMARY KEY (category_id, level_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE classe (id INT AUTO_INCREMENT NOT NULL, name VARCHAR(255) NOT NULL, level_id_id INT DEFAULT NULL, category_id INT DEFAULT NULL, INDEX IDX_8F87BF96159D9B5E (level_id_id), INDEX IDX_8F87BF9612469DE2 (category_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
@@ -31,6 +31,8 @@ final class Version20250829092351 extends AbstractMigration
         $this->addSql('CREATE TABLE grade (id INT AUTO_INCREMENT NOT NULL, grade DOUBLE PRECISION NOT NULL, dividor DOUBLE PRECISION NOT NULL, title VARCHAR(255) NOT NULL, student_id INT DEFAULT NULL, course_id INT DEFAULT NULL, semester_id INT DEFAULT NULL, INDEX IDX_595AAE34CB944F1A (student_id), INDEX IDX_595AAE34591CC992 (course_id), INDEX IDX_595AAE344A798B6F (semester_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE level (id INT AUTO_INCREMENT NOT NULL, name VARCHAR(255) NOT NULL, PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE professor (id INT AUTO_INCREMENT NOT NULL, weekly_availability JSON DEFAULT NULL, user_id_id INT NOT NULL, UNIQUE INDEX UNIQ_790DD7E39D86650F (user_id_id), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
+        $this->addSql('CREATE TABLE professor_course (professor_id INT NOT NULL, course_id INT NOT NULL, INDEX IDX_3C7933807D2D84D5 (professor_id), INDEX IDX_3C793380591CC992 (course_id), PRIMARY KEY (professor_id, course_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
+        $this->addSql('CREATE TABLE professor_category (professor_id INT NOT NULL, category_id INT NOT NULL, INDEX IDX_6A15A3437D2D84D5 (professor_id), INDEX IDX_6A15A34312469DE2 (category_id), PRIMARY KEY (professor_id, category_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE refresh_tokens (refresh_token VARCHAR(128) NOT NULL, username VARCHAR(255) NOT NULL, valid DATETIME NOT NULL, id INT AUTO_INCREMENT NOT NULL, UNIQUE INDEX UNIQ_9BACE7E1C74F2195 (refresh_token), PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE semester (id INT AUTO_INCREMENT NOT NULL, name VARCHAR(255) NOT NULL, start_date DATETIME NOT NULL, end_date DATETIME NOT NULL, PRIMARY KEY (id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
         $this->addSql('CREATE TABLE semester_student (semester_id INT NOT NULL, student_id INT NOT NULL, INDEX IDX_11AAE6DC4A798B6F (semester_id), INDEX IDX_11AAE6DCCB944F1A (student_id), PRIMARY KEY (semester_id, student_id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci`');
@@ -41,6 +43,9 @@ final class Version20250829092351 extends AbstractMigration
         $this->addSql('ALTER TABLE absence ADD CONSTRAINT FK_765AE0C9CB944F1A FOREIGN KEY (student_id) REFERENCES student (id)');
         $this->addSql('ALTER TABLE absence ADD CONSTRAINT FK_765AE0C94A798B6F FOREIGN KEY (semester_id) REFERENCES semester (id)');
         $this->addSql('ALTER TABLE absence ADD CONSTRAINT FK_765AE0C9BEDDA25C FOREIGN KEY (course_session_id) REFERENCES course_session (id)');
+        $this->addSql('ALTER TABLE absence ADD CONSTRAINT FK_765AE0C9CD130C9C FOREIGN KEY (justified_by_id) REFERENCES `user` (id)');
+        $this->addSql('ALTER TABLE absence ADD CONSTRAINT FK_765AE0C9FC6B21F1 FOREIGN KEY (reviewed_by_id) REFERENCES `user` (id)');
+        $this->addSql('ALTER TABLE absence ADD CONSTRAINT FK_765AE0C9D05A957B FOREIGN KEY (recorded_by_id) REFERENCES `user` (id)');
         $this->addSql('ALTER TABLE category_level ADD CONSTRAINT FK_72D9835A12469DE2 FOREIGN KEY (category_id) REFERENCES category (id) ON DELETE CASCADE');
         $this->addSql('ALTER TABLE category_level ADD CONSTRAINT FK_72D9835A5FB14BA7 FOREIGN KEY (level_id) REFERENCES level (id) ON DELETE CASCADE');
         $this->addSql('ALTER TABLE classe ADD CONSTRAINT FK_8F87BF96159D9B5E FOREIGN KEY (level_id_id) REFERENCES level (id)');
@@ -58,6 +63,10 @@ final class Version20250829092351 extends AbstractMigration
         $this->addSql('ALTER TABLE grade ADD CONSTRAINT FK_595AAE34591CC992 FOREIGN KEY (course_id) REFERENCES course (id)');
         $this->addSql('ALTER TABLE grade ADD CONSTRAINT FK_595AAE344A798B6F FOREIGN KEY (semester_id) REFERENCES semester (id)');
         $this->addSql('ALTER TABLE professor ADD CONSTRAINT FK_790DD7E39D86650F FOREIGN KEY (user_id_id) REFERENCES `user` (id)');
+        $this->addSql('ALTER TABLE professor_course ADD CONSTRAINT FK_3C7933807D2D84D5 FOREIGN KEY (professor_id) REFERENCES professor (id) ON DELETE CASCADE');
+        $this->addSql('ALTER TABLE professor_course ADD CONSTRAINT FK_3C793380591CC992 FOREIGN KEY (course_id) REFERENCES course (id) ON DELETE CASCADE');
+        $this->addSql('ALTER TABLE professor_category ADD CONSTRAINT FK_6A15A3437D2D84D5 FOREIGN KEY (professor_id) REFERENCES professor (id) ON DELETE CASCADE');
+        $this->addSql('ALTER TABLE professor_category ADD CONSTRAINT FK_6A15A34312469DE2 FOREIGN KEY (category_id) REFERENCES category (id) ON DELETE CASCADE');
         $this->addSql('ALTER TABLE semester_student ADD CONSTRAINT FK_11AAE6DC4A798B6F FOREIGN KEY (semester_id) REFERENCES semester (id) ON DELETE CASCADE');
         $this->addSql('ALTER TABLE semester_student ADD CONSTRAINT FK_11AAE6DCCB944F1A FOREIGN KEY (student_id) REFERENCES student (id) ON DELETE CASCADE');
         $this->addSql('ALTER TABLE semester_classe ADD CONSTRAINT FK_BA9937334A798B6F FOREIGN KEY (semester_id) REFERENCES semester (id) ON DELETE CASCADE');
@@ -74,6 +83,9 @@ final class Version20250829092351 extends AbstractMigration
         $this->addSql('ALTER TABLE absence DROP FOREIGN KEY FK_765AE0C9CB944F1A');
         $this->addSql('ALTER TABLE absence DROP FOREIGN KEY FK_765AE0C94A798B6F');
         $this->addSql('ALTER TABLE absence DROP FOREIGN KEY FK_765AE0C9BEDDA25C');
+        $this->addSql('ALTER TABLE absence DROP FOREIGN KEY FK_765AE0C9CD130C9C');
+        $this->addSql('ALTER TABLE absence DROP FOREIGN KEY FK_765AE0C9FC6B21F1');
+        $this->addSql('ALTER TABLE absence DROP FOREIGN KEY FK_765AE0C9D05A957B');
         $this->addSql('ALTER TABLE category_level DROP FOREIGN KEY FK_72D9835A12469DE2');
         $this->addSql('ALTER TABLE category_level DROP FOREIGN KEY FK_72D9835A5FB14BA7');
         $this->addSql('ALTER TABLE classe DROP FOREIGN KEY FK_8F87BF96159D9B5E');
@@ -91,6 +103,10 @@ final class Version20250829092351 extends AbstractMigration
         $this->addSql('ALTER TABLE grade DROP FOREIGN KEY FK_595AAE34591CC992');
         $this->addSql('ALTER TABLE grade DROP FOREIGN KEY FK_595AAE344A798B6F');
         $this->addSql('ALTER TABLE professor DROP FOREIGN KEY FK_790DD7E39D86650F');
+        $this->addSql('ALTER TABLE professor_course DROP FOREIGN KEY FK_3C7933807D2D84D5');
+        $this->addSql('ALTER TABLE professor_course DROP FOREIGN KEY FK_3C793380591CC992');
+        $this->addSql('ALTER TABLE professor_category DROP FOREIGN KEY FK_6A15A3437D2D84D5');
+        $this->addSql('ALTER TABLE professor_category DROP FOREIGN KEY FK_6A15A34312469DE2');
         $this->addSql('ALTER TABLE semester_student DROP FOREIGN KEY FK_11AAE6DC4A798B6F');
         $this->addSql('ALTER TABLE semester_student DROP FOREIGN KEY FK_11AAE6DCCB944F1A');
         $this->addSql('ALTER TABLE semester_classe DROP FOREIGN KEY FK_BA9937334A798B6F');
@@ -110,6 +126,8 @@ final class Version20250829092351 extends AbstractMigration
         $this->addSql('DROP TABLE grade');
         $this->addSql('DROP TABLE level');
         $this->addSql('DROP TABLE professor');
+        $this->addSql('DROP TABLE professor_course');
+        $this->addSql('DROP TABLE professor_category');
         $this->addSql('DROP TABLE refresh_tokens');
         $this->addSql('DROP TABLE semester');
         $this->addSql('DROP TABLE semester_student');

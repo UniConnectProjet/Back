@@ -25,7 +25,7 @@ class UserControllerTest extends AbstractApiTestCase
     {
         $this->authenticate();
         $this->jsonRequest('POST', '/api/users/', []);
-        $this->assertContains($this->client->getResponse()->getStatusCode(), [Response::HTTP_BAD_REQUEST, 422]);
+        $this->assertTrue(in_array($this->client->getResponse()->getStatusCode(), [Response::HTTP_BAD_REQUEST, 422]));
     }
 
     public function test_update_unknown_user_returns_404(): void

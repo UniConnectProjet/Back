@@ -39,7 +39,7 @@ class Classe
     /**
      * @var Collection<int, Course>
      */
-    #[ORM\ManyToMany(targetEntity: Course::class, mappedBy: 'class_id')]
+    #[ORM\ManyToMany(targetEntity: Course::class, mappedBy: 'classes')]
     #[Groups(['getAllClasses', 'getAllStudents'])]
     private Collection $courses;
 
@@ -158,7 +158,7 @@ class Classe
     {
         if (!$this->courses->contains($course)) {
             $this->courses->add($course);
-            $course->addClassId($this);
+            $course->addClass($this);
         }
 
         return $this;

@@ -43,7 +43,7 @@ abstract class AbstractApiTestCase extends WebTestCase {
     
     protected function authenticate(): void
     {
-        $email = $this->getCredentials()['username'] ?? 'test@example.com';
+        $email = $this->getCredentials()['email'] ?? 'test@example.com';
 
         $user = $this->em->getRepository(\App\Entity\User::class)
             ->findOneBy(['email' => $email]);
@@ -51,7 +51,17 @@ abstract class AbstractApiTestCase extends WebTestCase {
         $this->assertNotNull($user, 'User de test introuvable: '.$email.'. Assure-toi que la fixture crée bien cet utilisateur.');
 
         $this->client->loginUser($user);
-}
+    }
+
+    protected function authenticateAsProfessor(): void
+    {
+        $user = $this->em->getRepository(\App\Entity\User::class)
+            ->findOneBy(['email' => 'prof@example.com']);
+
+        $this->assertNotNull($user, 'Professor user not found. Make sure the fixture creates this user.');
+
+        $this->client->loginUser($user);
+    }
  
     
     protected function jsonRequest(string $method, string $uri, array $payload = [], array $server = []): void { 

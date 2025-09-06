@@ -7,10 +7,14 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Security;
 use Sensio\Bundle\FrameworkExtraBundle\Configuration\IsGranted;
+use Doctrine\ORM\EntityManagerInterface;
 
 #[Route('/api')]
 final class MeController extends AbstractController
 {
+    public function __construct(
+        private EntityManagerInterface $em
+    ) {}
     #[Route('/me', name: 'api_me', methods: ['GET'])]
     #[IsGranted('IS_AUTHENTICATED_FULLY')]
     public function me(Security $security): JsonResponse
@@ -24,8 +28,8 @@ final class MeController extends AbstractController
         $login = $email && str_contains($email, '@') ? explode('@', $email)[0] : 'user';
 
         // Tes champs sur User
-        $name     = method_exists($user, 'getName')     ? $user->getName()     : null;
-        $lastname = method_exists($user, 'getLastname') ? $user->getLastname() : null;
+        $name     = $user->getName();
+        $lastname = $user->getLastname();
 
         // Fallback via Student/Professor si besoin
         if ((!$name || !$lastname) && method_exists($user, 'getStudent') && $user->getStudent()) {
@@ -46,11 +50,12 @@ final class MeController extends AbstractController
             'id'          => method_exists($user, 'getId') ? $user->getId() : null,
             'email'       => $email,
             'roles'       => method_exists($user, 'getRoles') ? $user->getRoles() : [],
-            'name'        => $name,       // prénom
-            'lastname'    => $lastname,   // nom
+            'name'        => $name ?? null,       // prénom
+            'lastname'    => $lastname ?? null,   // nom
             'fullName'    => $fullName !== '' ? $fullName : null,
             'displayName' => $displayName,
         ]);
     }
+
 
 }
