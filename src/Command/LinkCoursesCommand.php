@@ -63,10 +63,10 @@ class LinkCoursesCommand extends Command
                         // Vérifier si la liaison existe déjà
                         if (!$professor->getCourses()->contains($course)) {
                             $professor->addCourse($course);
-                            $io->text(sprintf('  ✅ Lié au cours : %s (ID: %d)', $course->getName(), $course->getId()));
+                            $io->text(sprintf('  Lié au cours : %s (ID: %d)', $course->getName(), $course->getId()));
                             $totalLinked++;
                         } else {
-                            $io->text(sprintf('  ⚠️  Déjà lié au cours : %s (ID: %d)', $course->getName(), $course->getId()));
+                            $io->text(sprintf('  Déjà lié au cours : %s (ID: %d)', $course->getName(), $course->getId()));
                         }
                     }
                 }
