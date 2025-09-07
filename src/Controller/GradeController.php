@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Student;
 use App\Entity\Course;
+use App\Entity\Semester;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -104,23 +105,57 @@ class GradeController extends AbstractController
         int $studentId
         ): JsonResponse
     {
-        $data = $request->getContent();
-        $grade = $serializer->deserialize($data, Grade::class, 'json');
-        $student = $em->getRepository(Student::class)->find($studentId);
+        $data = json_decode($request->getContent(), true);
         
+        if (!$data) {
+            return new JsonResponse(['error' => 'Invalid JSON data'], Response::HTTP_BAD_REQUEST);
+        }
+        
+        $student = $em->getRepository(Student::class)->find($studentId);
         if (!$student) {
             return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
         }
+        
+        $course = null;
+        if (isset($data['course'])) {
+            $course = $em->getRepository(Course::class)->find($data['course']);
+            if (!$course) {
+                return new JsonResponse(['error' => 'Course not found'], Response::HTTP_NOT_FOUND);
+            }
+        }
+        
+        $grade = new Grade();
         $grade->setStudent($student);
+        $grade->setCourse($course);
+        $grade->setGrade($data['grade'] ?? 0);
+        $grade->setDividor($data['dividor'] ?? 1);
+        $grade->setTitle($data['title'] ?? '');
+        $grade->setCreatedAt(new \DateTimeImmutable());
+        
+        // Déterminer le semestre basé sur la date actuelle
+        $currentDate = new \DateTime();
+        $year = $currentDate->format('Y');
+        $month = (int) $currentDate->format('n');
+        $day = (int) $currentDate->format('j');
+        
+        $semester = null;
+        if (($month === 9 && $day >= 2) || $month === 10 || $month === 11 || $month === 12 || ($month === 1 && $day <= 21)) {
+            $semester = $em->getRepository(Semester::class)->findOneBy(['name' => 'S1']);
+        } else {
+            $semester = $em->getRepository(Semester::class)->findOneBy(['name' => 'S2']);
+        }
+        
+        if ($semester) {
+            $grade->setSemester($semester);
+        }
 
         $em->persist($grade);
         $em->flush();
-        return new JsonResponse(
-            'Grade added',
-            Response::HTTP_CREATED,
-            [],
-            true
-        );
+        
+        return new JsonResponse([
+            'message' => 'Grade added successfully',
+            'gradeId' => $grade->getId()
+        ], Response::HTTP_CREATED);
     }
 
     #[Route('/course/{courseId}', name: 'grade.addForCourse', methods:['POST'])]

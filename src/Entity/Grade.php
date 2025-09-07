@@ -38,6 +38,10 @@ class Grade
     #[Groups(['getAllGrades'])]
     private ?Semester $semester = null;
 
+    #[ORM\Column(type: 'datetime_immutable')]
+    #[Groups(['getAllGrades', 'getAllStudents', 'getStudentGrades'])]
+    private ?\DateTimeImmutable $createdAt = null;
+
     public function getSemester(): ?Semester
     {
         return $this->semester;
@@ -110,6 +114,18 @@ class Grade
     public function setCourse(?Course $course): static
     {
         $this->course = $course;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable
+    {
+        return $this->createdAt;
+    }
+
+    public function setCreatedAt(\DateTimeImmutable $createdAt): static
+    {
+        $this->createdAt = $createdAt;
 
         return $this;
     }
