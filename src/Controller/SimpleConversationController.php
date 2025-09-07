@@ -46,11 +46,27 @@ class SimpleConversationController extends AbstractController
         $conversations = $this->conversationRepository->findByUser($user);
 
         // Ajouter le compteur de messages non lus pour chaque conversation
+        $conversationsWithUnreadCount = [];
         foreach ($conversations as $conversation) {
-            $conversation->unreadCount = $conversation->getUnreadCountForUser($user);
+            $unreadCount = $conversation->getUnreadCountForUser($user);
+            error_log("Conversation {$conversation->getId()}: unreadCount = {$unreadCount}");
+            
+            // Créer un tableau avec les données de la conversation + le compteur
+            $conversationData = [
+                'id' => $conversation->getId(),
+                'title' => $conversation->getTitle(),
+                'createdAt' => $conversation->getCreatedAt(),
+                'updatedAt' => $conversation->getUpdatedAt(),
+                'participants' => $conversation->getParticipants(),
+                'messages' => $conversation->getMessages(),
+                'lastMessage' => $conversation->getLastMessage(),
+                'unreadCount' => $unreadCount
+            ];
+            
+            $conversationsWithUnreadCount[] = $conversationData;
         }
 
-        return $this->json($conversations, Response::HTTP_OK, [], ['groups' => ['getConversations']]);
+        return $this->json($conversationsWithUnreadCount, Response::HTTP_OK, [], ['groups' => ['getConversations']]);
     }
 
     #[Route('', name: 'create', methods: ['POST'])]

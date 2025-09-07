@@ -171,12 +171,22 @@ class Conversation
     public function getUnreadCountForUser(User $user): int
     {
         $count = 0;
+        $totalMessages = count($this->messages);
+        
         foreach ($this->messages as $message) {
-            // Compter les messages non lus de l'autre participant
-            if ($message->getSender() !== $user && !$message->isRead()) {
+            // Compter les messages non lus POUR l'utilisateur actuel
+            // (messages envoyés par d'autres utilisateurs et non lus par l'utilisateur actuel)
+            $isFromOtherUser = $message->getSender() !== $user;
+            $isUnread = !$message->isRead();
+            
+            if ($isFromOtherUser && $isUnread) {
                 $count++;
             }
         }
+        
+        // Debug: logger le compteur avec plus de détails
+        error_log("Conversation {$this->id}: User {$user->getId()}, Total messages: {$totalMessages}, Unread count: {$count}");
+        
         return $count;
     }
 }
