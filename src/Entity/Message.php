@@ -16,11 +16,11 @@ class Message
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['getMessage', 'getMessages'])]
+    #[Groups(['getMessage', 'getMessages', 'getConversations'])]
     private ?int $id = null;
 
     #[ORM\Column(type: Types::TEXT)]
-    #[Groups(['getMessage', 'getMessages'])]
+    #[Groups(['getMessage', 'getMessages', 'getConversations'])]
     #[Assert\NotBlank(message: 'Le contenu du message ne peut pas être vide')]
     #[Assert\Length(
         max: 2000,
@@ -29,12 +29,12 @@ class Message
     private ?string $content = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
-    #[Groups(['getMessage', 'getMessages'])]
+    #[Groups(['getMessage', 'getMessages', 'getConversations'])]
     private ?\DateTimeInterface $createdAt = null;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['getMessage', 'getMessages'])]
+    #[Groups(['getMessage', 'getMessages', 'getConversations'])]
     private ?User $sender = null;
 
     #[ORM\ManyToOne(targetEntity: Conversation::class, inversedBy: 'messages')]
@@ -42,7 +42,7 @@ class Message
     private ?Conversation $conversation = null;
 
     #[ORM\Column(type: Types::BOOLEAN)]
-    #[Groups(['getMessage', 'getMessages'])]
+    #[Groups(['getMessage', 'getMessages', 'getConversations'])]
     private bool $isRead = false;
 
     public function __construct()

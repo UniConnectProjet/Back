@@ -203,18 +203,26 @@ class GradeController extends AbstractController
     #[Route('/save', name: 'save_grades', methods: ['POST'])]
     public function saveGrades(Request $request): JsonResponse
     {
-        $data = json_decode($request->getContent(), true);
-        
-        if (!isset($data['classId']) || !isset($data['assignments']) || !isset($data['grades'])) {
-            return $this->json(['error' => 'Données manquantes'], 400);
-        }
-
-        $classId = $data['classId'];
-        $courseId = $data['courseId'] ?? null;
-        $assignments = $data['assignments'];
-        $grades = $data['grades'];
-
         try {
+            $data = json_decode($request->getContent(), true);
+            
+            if (!$data) {
+                return $this->json(['error' => 'Données JSON invalides'], 400);
+            }
+            
+            if (!isset($data['classId']) || !isset($data['assignments']) || !isset($data['grades'])) {
+                return $this->json(['error' => 'Données manquantes: classId, assignments ou grades'], 400);
+            }
+
+            $classId = $data['classId'];
+            $courseId = $data['courseId'] ?? null;
+            $assignments = $data['assignments'];
+            $grades = $data['grades'];
+            
+            // Log pour déboguer
+            error_log('GradeController::saveGrades - classId: ' . $classId);
+            error_log('GradeController::saveGrades - assignments: ' . json_encode($assignments));
+            error_log('GradeController::saveGrades - grades: ' . json_encode($grades));
             // Récupérer la classe
             $classe = $this->em->getRepository(\App\Entity\Classe::class)->find($classId);
             if (!$classe) {
@@ -229,22 +237,19 @@ class GradeController extends AbstractController
                     return $this->json(['error' => 'Cours non trouvé'], 404);
                 }
             } else {
-                // Si pas de cours spécifique, créer un cours temporaire pour la classe
-                $course = new \App\Entity\Course();
-                $course->setName('Devoirs - ' . $classe->getName());
-                $course->setDescription('Devoirs créés via l\'interface de saisie des notes');
-                $course->setAverage(0);
+                // Si pas de cours spécifique, utiliser un cours par défaut ou le premier cours de la classe
+                $course = $this->em->getRepository(\App\Entity\Course::class)
+                    ->createQueryBuilder('c')
+                    ->join('c.classes', 'cl')
+                    ->where('cl.id = :classId')
+                    ->setParameter('classId', $classId)
+                    ->setMaxResults(1)
+                    ->getQuery()
+                    ->getOneOrNullResult();
                 
-                // Trouver une unité d'enseignement pour cette classe
-                $courseUnit = $this->em->getRepository(\App\Entity\CourseUnit::class)
-                    ->findOneBy(['category' => $classe->getCategory()]);
-                
-                if ($courseUnit) {
-                    $course->setCourseUnit($courseUnit);
+                if (!$course) {
+                    return $this->json(['error' => 'Aucun cours trouvé pour cette classe. Veuillez d\'abord créer un cours.'], 404);
                 }
-                
-                $this->em->persist($course);
-                $this->em->flush(); // Sauvegarder pour avoir un ID
             }
 
             $savedGrades = [];

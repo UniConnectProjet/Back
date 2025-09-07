@@ -157,6 +157,7 @@ class Conversation
         return $this->participants->contains($user);
     }
 
+    #[Groups(['getConversation', 'getConversations'])]
     public function getLastMessage(): ?Message
     {
         if ($this->messages->isEmpty()) {

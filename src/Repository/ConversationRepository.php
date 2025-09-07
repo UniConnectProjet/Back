@@ -24,6 +24,8 @@ class ConversationRepository extends ServiceEntityRepository
     {
         return $this->createQueryBuilder('c')
             ->join('c.participants', 'p')
+            ->leftJoin('c.messages', 'm')
+            ->addSelect('m')
             ->where('p = :user')
             ->setParameter('user', $user)
             ->orderBy('c.updatedAt', 'DESC')

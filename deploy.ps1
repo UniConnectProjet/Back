@@ -40,3 +40,4 @@ docker compose up -d --no-deps --build $ComposeService
 Write-Host "✅ Déploiement terminé avec succès!" -ForegroundColor Green
 Write-Host "📊 Vérification du statut des conteneurs:" -ForegroundColor Cyan
 docker compose ps
+

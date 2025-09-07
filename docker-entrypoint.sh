@@ -17,3 +17,4 @@ echo "Migrations terminées - démarrage de l'application..."
 
 # Exécuter la commande passée en argument
 exec "$@"
+

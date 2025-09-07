@@ -19,6 +19,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId', 'getConversations', 'getMessages'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]

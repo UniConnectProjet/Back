@@ -32,7 +32,7 @@ class SimpleConversationController extends AbstractController
         private MessageRepository $messageRepository,
         private UserRepository $userRepository,
         private NotificationService $notificationService
-        // private HubInterface $hub // Temporairement désactivé
+        // private MercureService $mercureService // Temporairement désactivé
     ) {
     }
 
@@ -161,6 +161,7 @@ class SimpleConversationController extends AbstractController
 
         // TODO: Réactiver Mercure une fois configuré correctement
         // Pour l'instant, les messages sont sauvegardés en base et récupérés au refresh
+        // $this->mercureService->publishMessage($message);
 
         return $this->json($message, Response::HTTP_CREATED, [], ['groups' => ['getMessages']]);
     }
