@@ -49,7 +49,9 @@ class SimpleConversationController extends AbstractController
         $conversationsWithUnreadCount = [];
         foreach ($conversations as $conversation) {
             $unreadCount = $conversation->getUnreadCountForUser($user);
-            // error_log("Conversation {$conversation->getId()}: unreadCount = {$unreadCount}");
+            
+            // Log côté serveur pour le debugging
+            error_log("Chat API - User {$user->getId()}: Conversation {$conversation->getId()} has {$unreadCount} unread messages");
             
             // Créer un tableau avec les données de la conversation + le compteur
             $conversationData = [
@@ -170,6 +172,9 @@ class SimpleConversationController extends AbstractController
         
         $this->entityManager->flush();
 
+        // Log côté serveur
+        error_log("Chat API - Messages marked as read: " . count($unreadMessages) . " messages for user {$user->getId()} in conversation {$conversation->getId()}");
+
         return $this->json([
             'success' => true,
             'markedCount' => count($unreadMessages)
@@ -207,6 +212,9 @@ class SimpleConversationController extends AbstractController
 
         $this->entityManager->persist($message);
         $this->entityManager->flush();
+
+        // Log côté serveur
+        error_log("Chat API - Message sent: ID {$message->getId()}, Conversation {$conversation->getId()}, Sender {$user->getId()}");
 
         // Créer les notifications pour les autres participants
         $this->notificationService->createMessageNotification($message);
