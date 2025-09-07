@@ -67,6 +67,8 @@ class ProfessorSessionController extends AbstractController
     /**
      * Liste les séances du professeur connecté, avec filtre date facultatif.
      * GET /api/prof/sessions?from=2025-08-25&to=2025-08-31
+     * 
+     * Retourne exactement la même structure que l'endpoint étudiant mais filtré sur le professeur connecté.
      */
     #[Route('/sessions', name: 'prof_sessions_list', methods: ['GET'])]
     public function listSessions(
@@ -85,39 +87,59 @@ class ProfessorSessionController extends AbstractController
         $from = $request->query->get('from');
         $to   = $request->query->get('to');
 
-        $qb = $sessionRepo->createQueryBuilder('s')
-            ->andWhere('s.professor = :p')->setParameter('p', $prof)
-            ->orderBy('s.startAt', 'ASC');
-
-        if ($from) {
-            $fromDate = new \DateTimeImmutable($from . ' 00:00:00');
-            $qb->andWhere('s.startAt >= :from')->setParameter('from', $fromDate);
-        }
-        if ($to) {
-            $toDate = new \DateTimeImmutable($to . ' 23:59:59');
-            $qb->andWhere('s.startAt <= :to')->setParameter('to', $toDate);
+        // Validation des paramètres requis
+        if (!$from || !$to) {
+            return $this->json(['message' => 'Missing required parameters: from and to'], 400);
         }
 
-        $sessions = $qb->getQuery()->getResult();
+        try {
+            $fromDt = (new \DateTimeImmutable($from))->setTime(0, 0, 0);
+            $toDt   = (new \DateTimeImmutable($to))->setTime(23, 59, 59);
+        } catch (\Exception) {
+            return $this->json(['message' => 'Invalid date format'], 400);
+        }
 
+        if ($fromDt > $toDt) {
+            return $this->json(['message' => 'Invalid date range'], 400);
+        }
+
+        // Requête filtrée sur le professeur connecté et la plage de dates
+        // Inclure toutes les données nécessaires pour éviter les requêtes N+1
+        $sessions = $sessionRepo->createQueryBuilder('s')
+            ->leftJoin('s.professor', 'p')
+            ->leftJoin('p.userId', 'u')
+            ->leftJoin('s.course', 'c')
+            ->leftJoin('s.classe', 'cl')
+            ->addSelect('p', 'u', 'c', 'cl')
+            ->andWhere('s.professor = :prof')
+            ->andWhere('s.startAt >= :from AND s.startAt < :to')
+            ->setParameter('prof', $prof)
+            ->setParameter('from', $fromDt)
+            ->setParameter('to', $toDt)
+            ->orderBy('s.startAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        // Format identique à l'endpoint étudiant
         $data = array_map(function (CourseSession $s) {
-            // Vérifier s'il y a des absences enregistrées pour cette séance
-            $hasRoll = $this->em->getRepository(Absence::class)
-                ->createQueryBuilder('a')
-                ->select('COUNT(a.id)')
-                ->where('a.courseSession = :session')
-                ->setParameter('session', $s)
-                ->getQuery()
-                ->getSingleScalarResult() > 0;
+            $course = $s->getCourse();
+            $classe = $s->getClasse();
+            $professor = $s->getProfessor(); // Récupérer le professeur de la séance
+            $user = $professor ? $professor->getUserId() : null; // Récupérer l'utilisateur associé
+
 
             return [
-                'id'       => $s->getId(),
-                'course'   => method_exists($s->getCourse(), 'getName') ? $s->getCourse()->getName() : $s->getCourse()->getId(),
-                'classe'   => method_exists($s->getClasse(), 'getName') ? $s->getClasse()->getName() : ($s->getClasse()?->getId()),
-                'startAt'  => $s->getStartAt()?->format(\DateTimeInterface::ATOM),
-                'endAt'    => $s->getEndAt()?->format(\DateTimeInterface::ATOM),
-                'room'     => method_exists($s, 'getRoom') ? $s->getRoom() : null,
-                'hasRoll'  => $hasRoll,
+                'id' => $s->getId(),
+                'courseTitle' => $course ? $course->getName() : 'Cours',
+                'classLabel' => $classe ? $classe->getName() : null,
+                'startAt' => $s->getStartAt()?->format(\DateTimeInterface::ATOM),
+                'endAt' => $s->getEndAt()?->format(\DateTimeInterface::ATOM),
+                'room' => method_exists($s, 'getRoom') ? $s->getRoom() : null,
+                'professor' => $professor && $user ? [
+                    'id' => $professor->getId(),
+                    'name' => method_exists($user, 'getName') ? $user->getName() : null,
+                    'lastname' => method_exists($user, 'getLastname') ? $user->getLastname() : null,
+                ] : null,
             ];
         }, $sessions);
 
