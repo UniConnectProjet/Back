@@ -68,12 +68,7 @@ class MercureService
     {
         $topic = "user/{$userId}/notifications";
         
-        $data = [
-            'type' => 'notification',
-            'notification' => $notificationData
-        ];
-
-        $update = new Update($topic, json_encode($data));
+        $update = new Update($topic, json_encode($notificationData));
         $this->hub->publish($update);
     }
 }

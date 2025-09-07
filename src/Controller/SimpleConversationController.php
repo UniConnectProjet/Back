@@ -45,6 +45,11 @@ class SimpleConversationController extends AbstractController
         // Récupérer les conversations de l'utilisateur
         $conversations = $this->conversationRepository->findByUser($user);
 
+        // Ajouter le compteur de messages non lus pour chaque conversation
+        foreach ($conversations as $conversation) {
+            $conversation->unreadCount = $conversation->getUnreadCountForUser($user);
+        }
+
         return $this->json($conversations, Response::HTTP_OK, [], ['groups' => ['getConversations']]);
     }
 
@@ -124,6 +129,37 @@ class SimpleConversationController extends AbstractController
         return $this->json($messages, Response::HTTP_OK, [], ['groups' => ['getMessages']]);
     }
 
+    #[Route('/{id}/messages/read', name: 'mark_messages_read', methods: ['PUT'])]
+    public function markMessagesAsRead(int $id): JsonResponse
+    {
+        /** @var User $user */
+        $user = $this->getUser();
+        
+        $conversation = $this->conversationRepository->find($id);
+        if (!$conversation) {
+            return $this->json(['error' => 'Conversation not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        // Vérifier que l'utilisateur est participant
+        if (!$conversation->getParticipants()->contains($user)) {
+            return $this->json(['error' => 'Access denied'], Response::HTTP_FORBIDDEN);
+        }
+
+        // Marquer tous les messages non lus de cette conversation comme lus
+        $unreadMessages = $this->messageRepository->findUnreadByConversationAndUser($conversation, $user);
+        
+        foreach ($unreadMessages as $message) {
+            $message->setIsRead(true);
+        }
+        
+        $this->entityManager->flush();
+
+        return $this->json([
+            'success' => true,
+            'markedCount' => count($unreadMessages)
+        ]);
+    }
+
     #[Route('/{id}/messages', name: 'send_message', methods: ['POST'])]
     public function sendMessage(int $id, Request $request): JsonResponse
     {
@@ -161,8 +197,16 @@ class SimpleConversationController extends AbstractController
 
         // TODO: Réactiver Mercure une fois configuré correctement
         // Pour l'instant, les messages sont sauvegardés en base et récupérés au refresh
-        // $this->mercureService->publishMessage($message);
 
         return $this->json($message, Response::HTTP_CREATED, [], ['groups' => ['getMessages']]);
+    }
+
+    private function truncateContent(string $content, int $maxLength = 100): string
+    {
+        if (strlen($content) <= $maxLength) {
+            return $content;
+        }
+        
+        return substr($content, 0, $maxLength) . '...';
     }
 }

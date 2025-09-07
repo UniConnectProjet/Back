@@ -4,6 +4,7 @@ namespace App\Repository;
 
 use App\Entity\Message;
 use App\Entity\Conversation;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -53,6 +54,22 @@ class MessageRepository extends ServiceEntityRepository
             ->where('m.conversation = :conversation')
             ->andWhere('m.isRead = false')
             ->setParameter('conversation', $conversation)
+            ->orderBy('m.createdAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * @return Message[]
+     */
+    public function findUnreadByConversationAndUser(Conversation $conversation, User $user): array
+    {
+        return $this->createQueryBuilder('m')
+            ->where('m.conversation = :conversation')
+            ->andWhere('m.isRead = false')
+            ->andWhere('m.sender != :user')
+            ->setParameter('conversation', $conversation)
+            ->setParameter('user', $user)
             ->orderBy('m.createdAt', 'ASC')
             ->getQuery()
             ->getResult();

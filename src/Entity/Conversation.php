@@ -166,4 +166,17 @@ class Conversation
 
         return $this->messages->last();
     }
+
+    #[Groups(['getConversation', 'getConversations'])]
+    public function getUnreadCountForUser(User $user): int
+    {
+        $count = 0;
+        foreach ($this->messages as $message) {
+            // Compter les messages non lus de l'autre participant
+            if ($message->getSender() !== $user && !$message->isRead()) {
+                $count++;
+            }
+        }
+        return $count;
+    }
 }
