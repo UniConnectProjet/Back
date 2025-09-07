@@ -39,21 +39,33 @@ class GradeControllerTest extends AbstractApiTestCase
     public function test_add_grade_for_unknown_student_returns_404(): void
     {
         $this->authenticateAsProfessor();
-        $this->jsonRequest('POST', '/api/grade/student/999999', []);
+        $this->jsonRequest('POST', '/api/grade/student/999999', [
+            'grade' => 15.0,
+            'dividor' => 20.0,
+            'title' => 'Test Grade'
+        ]);
         $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
     }
 
     public function test_add_grade_for_unknown_course_returns_404(): void
     {
         $this->authenticateAsProfessor();
-        $this->jsonRequest('POST', '/api/grade/course/999999', []);
+        $this->jsonRequest('POST', '/api/grade/course/999999', [
+            'grade' => 15.0,
+            'dividor' => 20.0,
+            'title' => 'Test Grade'
+        ]);
         $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
     }
 
     public function test_update_unknown_grade_returns_404(): void
     {
         $this->authenticateAsProfessor();
-        $this->jsonRequest('PUT', '/api/grade/999999', []);
+        $this->jsonRequest('PUT', '/api/grade/999999', [
+            'grade' => 15.0,
+            'dividor' => 20.0,
+            'title' => 'Test Grade'
+        ]);
         $this->assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
     }
 

@@ -188,6 +188,7 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $grade->setDividor(20);
         $grade->setStudent($student);
         $grade->setCourse($course);
+        $grade->setCreatedAt(new \DateTimeImmutable('2024-10-10 10:00:00'));
         $em->persist($grade);
 
         $grade2 = new Grade();
@@ -196,6 +197,7 @@ final class TestFixtures extends Fixture implements FixtureGroupInterface
         $grade2->setDividor(20);
         $grade2->setStudent($student2Entity);
         $grade2->setCourse($course);
+        $grade2->setCreatedAt(new \DateTimeImmutable('2024-10-11 14:30:00'));
         $em->persist($grade2);
 
         // ========= Sessions de cours =========

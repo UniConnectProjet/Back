@@ -358,6 +358,29 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
     private function createGrades(ObjectManager $manager, array $students, array $courses): void
     {
+        // Types de contrôles avec leurs diviseurs typiques
+        $controlTypes = [
+            'DS' => [20, 20, 20, 20, 20], // Devoir surveillé - toujours sur 20
+            'TP' => [20, 20, 20, 20, 20], // Travaux pratiques - sur 20
+            'Quiz' => [10, 10, 10, 10, 10], // Quiz - sur 10
+            'Projet' => [20, 20, 20, 20, 20], // Projet - sur 20
+            'Contrôle' => [30, 30, 30, 30, 30], // Contrôle - sur 30
+            'Examen' => [20, 20, 20, 20, 20], // Examen - sur 20
+            'Devoir' => [20, 20, 20, 20, 20], // Devoir maison - sur 20
+        ];
+
+        // Dates de création récentes pour les tests
+        $baseDate = new \DateTimeImmutable('2025-01-01');
+        $dateRange = [
+            $baseDate->modify('-30 days'), // Il y a 30 jours
+            $baseDate->modify('-20 days'), // Il y a 20 jours
+            $baseDate->modify('-10 days'), // Il y a 10 jours
+            $baseDate->modify('-5 days'),  // Il y a 5 jours
+            $baseDate->modify('-2 days'),  // Il y a 2 jours
+            $baseDate->modify('-1 day'),   // Hier
+            $baseDate,                     // Aujourd'hui
+        ];
+
         foreach ($students as $student) {
             $studentClasse = $student->getClasse();
             
@@ -378,21 +401,35 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
             $toPick = array_values($eligible);
             shuffle($toPick);
-            $toPick = array_slice($toPick, 0, min(random_int(3, 6), count($toPick)));
+            $toPick = array_slice($toPick, 0, min(random_int(2, 4), count($toPick)));
 
             foreach ($toPick as $course) {
-                $dividorChoices = [10, 16, 20, 20, 20];
-                $dividor = $dividorChoices[array_rand($dividorChoices)];
-                $grade   = random_int(0, $dividor);
+                // Créer 2-4 contrôles par cours
+                $nbControls = random_int(2, 4);
+                
+                for ($i = 0; $i < $nbControls; $i++) {
+                    $controlType = array_rand($controlTypes);
+                    $dividorChoices = $controlTypes[$controlType];
+                    $dividor = $dividorChoices[array_rand($dividorChoices)];
+                    
+                    // Générer une note réaliste (éviter les notes trop basses ou trop hautes)
+                    $minGrade = max(0, $dividor * 0.3); // Minimum 30% de la note max
+                    $maxGrade = min($dividor, $dividor * 0.95); // Maximum 95% de la note max
+                    $grade = random_int((int)$minGrade, (int)$maxGrade);
 
-                $g = new Grade();
-                $g->setStudent($student);
-                $g->setCourse($course);
-                $g->setTitle($this->faker->randomElement(['TP', 'DS', 'Quiz', 'Projet']).' '.$this->faker->numberBetween(1, 3));
-                $g->setDividor($dividor);
-                $g->setGrade($grade);
+                    $g = new Grade();
+                    $g->setStudent($student);
+                    $g->setCourse($course);
+                    $g->setTitle($controlType . ' ' . ($i + 1));
+                    $g->setDividor($dividor);
+                    $g->setGrade($grade);
+                    
+                    // Définir une date de création aléatoire
+                    $createdAt = $dateRange[array_rand($dateRange)];
+                    $g->setCreatedAt($createdAt);
 
-                $manager->persist($g);
+                    $manager->persist($g);
+                }
             }
         }
     }
@@ -932,6 +969,107 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
         $manager->persist($s);
         return $s;
     }
+
+    /**
+     * Crée des données de test spécifiques pour le composant ClassGrades
+     * Un professeur de test avec des cours, classes et notes bien définis
+     */
+    private function createTestGradesForProfessor(ObjectManager $manager, array $students, array $courses, array $professors): void
+    {
+        // Trouver le premier professeur pour les tests
+        $testProfessor = $professors[0] ?? null;
+        if (!$testProfessor) {
+            return;
+        }
+
+        // Récupérer les cours de ce professeur
+        $professorCourses = [];
+        foreach ($courses as $course) {
+            if ($course->getProfessors()->contains($testProfessor)) {
+                $professorCourses[] = $course;
+            }
+        }
+
+        if (empty($professorCourses)) {
+            return;
+        }
+
+        // Prendre les 2 premiers cours du professeur
+        $testCourses = array_slice($professorCourses, 0, 2);
+        
+        // Récupérer les classes de ces cours
+        $testClasses = [];
+        foreach ($testCourses as $course) {
+            foreach ($course->getClasses() as $class) {
+                if (!in_array($class, $testClasses)) {
+                    $testClasses[] = $class;
+                }
+            }
+        }
+
+        if (empty($testClasses)) {
+            return;
+        }
+
+        // Prendre la première classe pour les tests
+        $testClass = $testClasses[0];
+        
+        // Récupérer les étudiants de cette classe
+        $testStudents = [];
+        foreach ($students as $student) {
+            if ($student->getClasse() === $testClass) {
+                $testStudents[] = $student;
+            }
+        }
+
+        if (empty($testStudents)) {
+            return;
+        }
+
+        // Créer des notes de test pour chaque cours
+        foreach ($testCourses as $course) {
+            $this->createTestGradesForCourse($manager, $testStudents, $course, $testProfessor);
+        }
+    }
+
+    /**
+     * Crée des notes de test pour un cours spécifique
+     */
+    private function createTestGradesForCourse(ObjectManager $manager, array $students, Course $course, Professor $professor): void
+    {
+        // Types de contrôles de test
+        $testControls = [
+            ['title' => 'DS 1', 'divisor' => 20, 'date' => '-15 days'],
+            ['title' => 'Contrôle', 'divisor' => 30, 'date' => '-10 days'],
+            ['title' => 'Quiz 1', 'divisor' => 10, 'date' => '-5 days'],
+            ['title' => 'TP 1', 'divisor' => 20, 'date' => '-3 days'],
+            ['title' => 'Devoir 1', 'divisor' => 20, 'date' => '-1 day'],
+        ];
+
+        $baseDate = new \DateTimeImmutable('2025-01-01');
+
+        foreach ($testControls as $control) {
+            $createdAt = $baseDate->modify($control['date']);
+            
+            // Créer des notes pour tous les étudiants de la classe
+            foreach ($students as $student) {
+                // Générer une note réaliste
+                $minGrade = max(0, $control['divisor'] * 0.4); // Minimum 40%
+                $maxGrade = min($control['divisor'], $control['divisor'] * 0.9); // Maximum 90%
+                $grade = random_int((int)$minGrade, (int)$maxGrade);
+
+                $g = new Grade();
+                $g->setStudent($student);
+                $g->setCourse($course);
+                $g->setTitle($control['title']);
+                $g->setDividor($control['divisor']);
+                $g->setGrade($grade);
+                $g->setCreatedAt($createdAt);
+
+                $manager->persist($g);
+            }
+        }
+    }
     
     public function load(ObjectManager $manager): void
     {
@@ -961,6 +1099,9 @@ class AppFixtures extends Fixture implements FixtureGroupInterface
 
         $this->createGrades($manager, $students, $courses);
         $this->createAbsences($manager, $students, $semesters);
+        
+        // Créer des données de test spécifiques pour le composant ClassGrades
+        $this->createTestGradesForProfessor($manager, $students, $courses, $professors);
         
         // Créer les conversations de test
         $conversations = $this->createConversations($manager, $students, $professors);
