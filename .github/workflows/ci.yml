@@ -116,17 +116,27 @@ jobs:
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
 
-            # Secrets en variables d'environnement pour Compose
-            export MERCURE_PUBLISHER_JWT_KEY="${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}"
-            export MERCURE_SUBSCRIBER_JWT_KEY="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}"
-            export MERCURE_PUBLISHER_JWT_KEY_PREPROD="${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}"
-            export MERCURE_SUBSCRIBER_JWT_KEY_PREPROD="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}"
+            # Assure le répertoire monté pour les clés
+            mkdir -p ./config/jwt
 
-            VERSION="${{ github.ref_name }}"
+            # Exporte tous les secrets nécessaires à docker compose
+            export JWT_PASSPHRASE='${{ secrets.JWT_PASSPHRASE }}'
+            export MERCURE_PUBLISHER_JWT_KEY='${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}'
+            export MERCURE_SUBSCRIBER_JWT_KEY='${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}'
+            export MERCURE_PUBLISHER_JWT_KEY_PREPROD='${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}'
+            export MERCURE_SUBSCRIBER_JWT_KEY_PREPROD='${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}'
+
+            VERSION='${{ github.ref_name }}'
             docker pull inesbrm1/uniconnect-backend:${VERSION}
 
-            # Important: ignorer /var/www/.env
+            # Démarre / met à jour le backend (ignore /var/www/.env)
             docker compose --env-file /dev/null up -d --no-deps --build backend
+
+            # Génère la paire de clés JWT si absente (avec la bonne passphrase)
+            docker compose exec -T -e JWT_PASSPHRASE="$JWT_PASSPHRASE" backend sh -lc \
+              '[ -f config/jwt/private.pem ] || php bin/console lexik:jwt:generate-keypair --overwrite -n || true'
+
+            # (Re)démarre Nginx & Mercure
             docker compose --env-file /dev/null up -d mercure nginx
 
       # ================= PREPROD (sur dev) =================
@@ -142,14 +152,24 @@ jobs:
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
 
-            # Secrets en variables d'environnement pour Compose
-            export MERCURE_PUBLISHER_JWT_KEY="${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}"
-            export MERCURE_SUBSCRIBER_JWT_KEY="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}"
-            export MERCURE_PUBLISHER_JWT_KEY_PREPROD="${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}"
-            export MERCURE_SUBSCRIBER_JWT_KEY_PREPROD="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}"
+            # Assure le répertoire monté pour les clés
+            mkdir -p ./config/jwt
+
+            # Exporte tous les secrets nécessaires à docker compose
+            export JWT_PASSPHRASE='${{ secrets.JWT_PASSPHRASE }}'
+            export MERCURE_PUBLISHER_JWT_KEY='${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}'
+            export MERCURE_SUBSCRIBER_JWT_KEY='${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}'
+            export MERCURE_PUBLISHER_JWT_KEY_PREPROD='${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}'
+            export MERCURE_SUBSCRIBER_JWT_KEY_PREPROD='${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}'
 
             docker pull inesbrm1/uniconnect-backend:preprod
 
-            # Important: ignorer /var/www/.env
+            # Démarre / met à jour le backend préprod (ignore /var/www/.env)
             docker compose --env-file /dev/null up -d --no-deps --build backend-preprod
+
+            # Génère la paire de clés JWT si absente (avec la bonne passphrase)
+            docker compose exec -T -e JWT_PASSPHRASE="$JWT_PASSPHRASE" backend-preprod sh -lc \
+              '[ -f config/jwt/private.pem ] || php bin/console lexik:jwt:generate-keypair --overwrite -n || true'
+
+            # (Re)démarre Mercure préprod + Nginx
             docker compose --env-file /dev/null up -d mercure-preprod nginx
