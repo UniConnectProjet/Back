@@ -119,11 +119,11 @@ jobs:
             # --- Injecte/actualise les secrets Mercure dans /var/www/.env
             install -m 600 /dev/null .env || true
             cat > .env <<'EOF'
-MERCURE_PUBLISHER_JWT_KEY=${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}
-MERCURE_SUBSCRIBER_JWT_KEY=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}
-MERCURE_PUBLISHER_JWT_KEY_PREPROD=${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}
-MERCURE_SUBSCRIBER_JWT_KEY_PREPROD=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}
-EOF
+            MERCURE_PUBLISHER_JWT_KEY=${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}
+            MERCURE_SUBSCRIBER_JWT_KEY=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}
+            MERCURE_PUBLISHER_JWT_KEY_PREPROD=${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}
+            MERCURE_SUBSCRIBER_JWT_KEY_PREPROD=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}
+            EOF
 
             VERSION="${{ github.ref_name }}"
             docker pull inesbrm1/uniconnect-backend:${VERSION}
@@ -150,11 +150,11 @@ EOF
             # --- Injecte/actualise les secrets Mercure dans /var/www/.env
             install -m 600 /dev/null .env || true
             cat > .env <<'EOF'
-MERCURE_PUBLISHER_JWT_KEY=${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}
-MERCURE_SUBSCRIBER_JWT_KEY=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}
-MERCURE_PUBLISHER_JWT_KEY_PREPROD=${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}
-MERCURE_SUBSCRIBER_JWT_KEY_PREPROD=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}
-EOF
+            MERCURE_PUBLISHER_JWT_KEY=${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}
+            MERCURE_SUBSCRIBER_JWT_KEY=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}
+            MERCURE_PUBLISHER_JWT_KEY_PREPROD=${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}
+            MERCURE_SUBSCRIBER_JWT_KEY_PREPROD=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}
+            EOF
 
             docker pull inesbrm1/uniconnect-backend:preprod
 
