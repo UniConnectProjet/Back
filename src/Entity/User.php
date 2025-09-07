@@ -19,14 +19,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId', 'getConversations', 'getMessages'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId'])]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId', 'getConversations', 'getMessages'])]
     private ?string $name = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId'])]
+    #[Groups(['getAllStudents', 'getAllUsers', 'getUser', 'getStudentsByClassId', 'getConversations', 'getMessages'])]
     private ?string $lastname = null;
 
     #[ORM\Column(type: Types::DATE_MUTABLE)]
@@ -56,8 +57,22 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToOne(mappedBy: 'userId', cascade: ['persist', 'remove'])]
     private ?Professor $professor = null;
 
+    /**
+     * @var Collection<int, Conversation>
+     */
+    #[ORM\ManyToMany(targetEntity: Conversation::class, mappedBy: 'participants')]
+    private Collection $conversations;
+
+    /**
+     * @var Collection<int, Notification>
+     */
+    #[ORM\OneToMany(targetEntity: Notification::class, mappedBy: 'user', cascade: ['persist', 'remove'])]
+    private Collection $notifications;
+
     public function __construct()
     {
+        $this->conversations = new ArrayCollection();
+        $this->notifications = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -159,6 +174,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
+
+
     public function getBirthday(): ?\DateTimeInterface
     {
         return $this->birthday;
@@ -208,6 +225,63 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         }
 
         $this->professor = $professor;
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Conversation>
+     */
+    public function getConversations(): Collection
+    {
+        return $this->conversations;
+    }
+
+    public function addConversation(Conversation $conversation): static
+    {
+        if (!$this->conversations->contains($conversation)) {
+            $this->conversations->add($conversation);
+            $conversation->addParticipant($this);
+        }
+
+        return $this;
+    }
+
+    public function removeConversation(Conversation $conversation): static
+    {
+        if ($this->conversations->removeElement($conversation)) {
+            $conversation->removeParticipant($this);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Notification>
+     */
+    public function getNotifications(): Collection
+    {
+        return $this->notifications;
+    }
+
+    public function addNotification(Notification $notification): static
+    {
+        if (!$this->notifications->contains($notification)) {
+            $this->notifications->add($notification);
+            $notification->setUser($this);
+        }
+
+        return $this;
+    }
+
+    public function removeNotification(Notification $notification): static
+    {
+        if ($this->notifications->removeElement($notification)) {
+            // set the owning side to null (unless already changed)
+            if ($notification->getUser() === $this) {
+                $notification->setUser(null);
+            }
+        }
 
         return $this;
     }

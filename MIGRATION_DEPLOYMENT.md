@@ -116,3 +116,4 @@ docker compose logs backend
 # Exécuter manuellement
 docker exec -it uniconnect-backend php bin/console doctrine:migrations:migrate --no-interaction -v
 ```
+

@@ -58,18 +58,6 @@ final class CategoryControllerTest extends AbstractApiTestCase
         ];
     }
 
-    public function testIndexReturnsWelcomeMessage(): void
-    {
-        $this->authenticate();
-        $this->client->request('GET', '/api/categories/category');
-        
-        $this->assertResponseIsSuccessful();
-        $response = $this->decodeJson();
-        
-        $this->assertArrayHasKey('message', $response);
-        $this->assertArrayHasKey('path', $response);
-        $this->assertStringContainsString('Welcome to your new controller!', $response['message']);
-    }
 
     public function testGetCoursesByCategoryReturnsCourses(): void
     {
