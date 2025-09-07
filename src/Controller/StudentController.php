@@ -15,6 +15,7 @@ use App\Repository\GradeRepository;
 use App\Repository\UserRepository;
 use App\Repository\SemesterRepository;
 use App\Repository\AbsenceRepository;
+use App\Repository\CourseSessionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 
@@ -499,6 +500,80 @@ class StudentController extends AbstractController
         }
 
         return $semesters;
+    }
+
+    #[Route('/me/schedule', name: 'me_schedule', methods: ['GET'])]
+    public function meSchedule(
+        Request $request,
+        CourseSessionRepository $sessionsRepo
+    ): JsonResponse {
+        $user = $this->getUser();
+        $student = $this->students->findOneBy(['user' => $user]);
+        if (!$student) {
+            return $this->json(['message' => 'Not a student'], Response::HTTP_NOT_FOUND);
+        }
+
+        $from = $request->query->get('from');
+        $to   = $request->query->get('to');
+        if (!$from || !$to) {
+            return $this->json(['message' => 'Missing dates'], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $fromDt = (new \DateTimeImmutable($from))->setTime(0,0,0);
+            $toDt   = (new \DateTimeImmutable($to))->setTime(23,59,59);
+        } catch (\Exception) {
+            return $this->json(['message' => 'Invalid dates'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($fromDt > $toDt) {
+            return $this->json(['message' => 'Invalid range'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $classe = method_exists($student, 'getClasse') ? $student->getClasse() : null;
+        if (!$classe) {
+            return $this->json([], Response::HTTP_OK);
+        }
+
+        $sessions = $sessionsRepo->createQueryBuilder('s')
+            ->leftJoin('s.professor', 'p')
+            ->leftJoin('p.userId', 'u')
+            ->leftJoin('s.course', 'c')
+            ->addSelect('p', 'u', 'c')
+            ->andWhere('s.classe = :classe')
+            ->andWhere('s.startAt >= :from AND s.startAt <= :to')
+            ->setParameter('classe', $classe)
+            ->setParameter('from', $fromDt)
+            ->setParameter('to', $toDt)
+            ->orderBy('s.startAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        $payload = array_map(function ($s) {
+            $course = method_exists($s, 'getCourse') ? $s->getCourse() : null;
+            $professor = method_exists($s, 'getProfessor') ? $s->getProfessor() : null;
+            $user = $professor ? $professor->getUserId() : null;
+
+            return [
+                'title' => $course?->getName() ?? 'Cours',
+                'start' => method_exists($s, 'getStartAt') ? $s->getStartAt()?->format(\DATE_ATOM) : null,
+                'end'   => method_exists($s, 'getEndAt')   ? $s->getEndAt()?->format(\DATE_ATOM)   : null,
+                'extendedProps' => [
+                    'professor' => $professor && $user ? [
+                        'id' => $professor->getId(),
+                        'name' => method_exists($user, 'getName') ? $user->getName() : null,
+                        'lastname' => method_exists($user, 'getLastname') ? $user->getLastname() : null,
+                        'fullName' => trim(sprintf('%s %s', 
+                            method_exists($user, 'getName') ? $user->getName() : '', 
+                            method_exists($user, 'getLastname') ? $user->getLastname() : ''
+                        ))
+                    ] : null,
+                    'location'  => method_exists($s, 'getRoom') ? $s->getRoom() : null,
+                ],
+            ];
+        }, $sessions);
+
+        return $this->json($payload, Response::HTTP_OK);
     }
 
 }

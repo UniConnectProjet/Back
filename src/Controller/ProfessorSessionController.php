@@ -104,7 +104,13 @@ class ProfessorSessionController extends AbstractController
         }
 
         // Requête filtrée sur le professeur connecté et la plage de dates
+        // Inclure toutes les données nécessaires pour éviter les requêtes N+1
         $sessions = $sessionRepo->createQueryBuilder('s')
+            ->leftJoin('s.professor', 'p')
+            ->leftJoin('p.userId', 'u')
+            ->leftJoin('s.course', 'c')
+            ->leftJoin('s.classe', 'cl')
+            ->addSelect('p', 'u', 'c', 'cl')
             ->andWhere('s.professor = :prof')
             ->andWhere('s.startAt >= :from AND s.startAt < :to')
             ->setParameter('prof', $prof)
@@ -118,6 +124,9 @@ class ProfessorSessionController extends AbstractController
         $data = array_map(function (CourseSession $s) {
             $course = $s->getCourse();
             $classe = $s->getClasse();
+            $professor = $s->getProfessor(); // Récupérer le professeur de la séance
+            $user = $professor ? $professor->getUserId() : null; // Récupérer l'utilisateur associé
+
 
             return [
                 'id' => $s->getId(),
@@ -126,6 +135,11 @@ class ProfessorSessionController extends AbstractController
                 'startAt' => $s->getStartAt()?->format(\DateTimeInterface::ATOM),
                 'endAt' => $s->getEndAt()?->format(\DateTimeInterface::ATOM),
                 'room' => method_exists($s, 'getRoom') ? $s->getRoom() : null,
+                'professor' => $professor && $user ? [
+                    'id' => $professor->getId(),
+                    'name' => method_exists($user, 'getName') ? $user->getName() : null,
+                    'lastname' => method_exists($user, 'getLastname') ? $user->getLastname() : null,
+                ] : null,
             ];
         }, $sessions);
 
