@@ -115,28 +115,22 @@ jobs:
             set -euo pipefail
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
-
-            # --- sudo session (avec mot de passe si nécessaire)
-            sudo -n true 2>/dev/null || echo "${{ secrets.VPS_PASSWORD }}" | sudo -S -v
-
-            # --- (ré)écrit /var/www/.env en root, sans l'afficher dans les logs
-            sudo tee /var/www/.env >/dev/null <<'EOF'
-            MERCURE_PUBLISHER_JWT_KEY=${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}
-            MERCURE_SUBSCRIBER_JWT_KEY=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}
-            MERCURE_PUBLISHER_JWT_KEY_PREPROD=${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}
-            MERCURE_SUBSCRIBER_JWT_KEY_PREPROD=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}
-            EOF
-            sudo chmod 600 /var/www/.env
-            sudo chown root:root /var/www/.env
-
+      
+            # Exporte TOUS les secrets (même si on ne démarre qu’un service, Compose parse tout)
+            export MERCURE_PUBLISHER_JWT_KEY="${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}"
+            export MERCURE_SUBSCRIBER_JWT_KEY="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}"
+            export MERCURE_PUBLISHER_JWT_KEY_PREPROD="${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}"
+            export MERCURE_SUBSCRIBER_JWT_KEY_PREPROD="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}"
+      
             VERSION="${{ github.ref_name }}"
             docker pull inesbrm1/uniconnect-backend:${VERSION}
-
+      
             # Redéploie backend prod
             docker compose up -d --no-deps --build backend
-
+      
             # (Re)démarre le Hub Mercure prod + Nginx
             docker compose up -d mercure nginx
+
 
       # ================= PREPROD (sur dev) =================
       - name: Deploy PREPROD (dev)
@@ -150,25 +144,19 @@ jobs:
             set -euo pipefail
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd /var/www
-
-            # --- sudo session (avec mot de passe si nécessaire)
-            sudo -n true 2>/dev/null || echo "${{ secrets.VPS_PASSWORD }}" | sudo -S -v
-
-            # --- (ré)écrit /var/www/.env en root, sans l'afficher dans les logs
-            sudo tee /var/www/.env >/dev/null <<'EOF'
-            MERCURE_PUBLISHER_JWT_KEY=${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}
-            MERCURE_SUBSCRIBER_JWT_KEY=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}
-            MERCURE_PUBLISHER_JWT_KEY_PREPROD=${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}
-            MERCURE_SUBSCRIBER_JWT_KEY_PREPROD=${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}
-            EOF
-            sudo chmod 600 /var/www/.env
-            sudo chown root:root /var/www/.env
-
+      
+            # Exporte TOUS les secrets (Compose parse tout le fichier)
+            export MERCURE_PUBLISHER_JWT_KEY="${{ secrets.MERCURE_PUBLISHER_JWT_KEY }}"
+            export MERCURE_SUBSCRIBER_JWT_KEY="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY }}"
+            export MERCURE_PUBLISHER_JWT_KEY_PREPROD="${{ secrets.MERCURE_PUBLISHER_JWT_KEY_PREPROD }}"
+            export MERCURE_SUBSCRIBER_JWT_KEY_PREPROD="${{ secrets.MERCURE_SUBSCRIBER_JWT_KEY_PREPROD }}"
+      
             docker pull inesbrm1/uniconnect-backend:preprod
-
+      
             # Redéploie backend préprod
             docker compose up -d --no-deps --build backend-preprod
-
+      
             # (Re)démarre le Hub Mercure préprod + Nginx
             docker compose up -d mercure-preprod nginx
+
 
