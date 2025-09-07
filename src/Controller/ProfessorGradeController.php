@@ -133,6 +133,20 @@ class ProfessorGradeController extends AbstractController
                 ];
             }
             
+            // Calculer la moyenne de la classe
+            $classAverage = 0;
+            if (!empty($controls)) {
+                $totalAverage = 0;
+                $controlCount = 0;
+                foreach ($controls as $control) {
+                    if ($control['average'] > 0) {
+                        $totalAverage += $control['average'];
+                        $controlCount++;
+                    }
+                }
+                $classAverage = $controlCount > 0 ? round($totalAverage / $controlCount, 2) : 0;
+            }
+
             return new JsonResponse([
                 'course' => [
                     'id' => $courseId,
@@ -142,7 +156,8 @@ class ProfessorGradeController extends AbstractController
                     'id' => $classId,
                     'label' => $class->getName()
                 ],
-                'controls' => $controls
+                'controls' => $controls,
+                'classAverage' => $classAverage
             ]);
         } catch (\Exception $e) {
             error_log('Erreur dans getCourseClassGrades: ' . $e->getMessage());

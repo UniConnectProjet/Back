@@ -15,14 +15,20 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ProfessorGradeControllerTest extends WebTestCase
 {
+    private \Symfony\Bundle\FrameworkBundle\KernelBrowser $client;
     private EntityManagerInterface $entityManager;
     private GradeRepository $gradeRepository;
+    private static int $testCounter = 0;
 
     protected function setUp(): void
     {
+        self::ensureKernelShutdown();
         $this->client = static::createClient();
         $this->entityManager = $this->client->getContainer()->get('doctrine')->getManager();
         $this->gradeRepository = $this->entityManager->getRepository(Grade::class);
+        
+        // Nettoyer la base de données avant chaque test
+        $this->cleanDatabase();
     }
 
     public function testGetGradesOverview(): void
@@ -99,8 +105,9 @@ class ProfessorGradeControllerTest extends WebTestCase
 
     private function createTestProfessor(): Professor
     {
+        self::$testCounter++;
         $user = new User();
-        $user->setEmail('professor@test.com');
+        $user->setEmail("professor" . self::$testCounter . "@test.com");
         $user->setPassword('password');
         $user->setName('John');
         $user->setLastname('Doe');
@@ -109,6 +116,9 @@ class ProfessorGradeControllerTest extends WebTestCase
 
         $professor = new Professor();
         $professor->setUserId($user);
+        
+        // Définir la relation bidirectionnelle
+        $user->setProfessor($professor);
 
         $this->entityManager->persist($user);
         $this->entityManager->persist($professor);
@@ -147,9 +157,9 @@ class ProfessorGradeControllerTest extends WebTestCase
         $class = $this->createTestClass();
         $course->addClass($class);
 
-        // Créer un étudiant
+        // Créer un étudiant avec un email unique
         $user = new User();
-        $user->setEmail('student@test.com');
+        $user->setEmail("student" . self::$testCounter . "@test.com");
         $user->setPassword('password');
         $user->setName('Jane');
         $user->setLastname('Smith');
@@ -183,6 +193,25 @@ class ProfessorGradeControllerTest extends WebTestCase
         $this->entityManager->persist($grade1);
         $this->entityManager->persist($grade2);
         $this->entityManager->flush();
+    }
+
+    private function cleanDatabase(): void
+    {
+        $conn = $this->entityManager->getConnection();
+        
+        // Désactiver les contraintes de clé étrangère
+        $conn->executeStatement('SET FOREIGN_KEY_CHECKS=0');
+        
+        // Supprimer toutes les données dans l'ordre inverse des dépendances
+        $conn->executeStatement('DELETE FROM grade');
+        $conn->executeStatement('DELETE FROM student');
+        $conn->executeStatement('DELETE FROM professor');
+        $conn->executeStatement('DELETE FROM course');
+        $conn->executeStatement('DELETE FROM classe');
+        $conn->executeStatement('DELETE FROM user');
+        
+        // Réactiver les contraintes de clé étrangère
+        $conn->executeStatement('SET FOREIGN_KEY_CHECKS=1');
     }
 
     protected function tearDown(): void
