@@ -49,7 +49,7 @@ class SimpleConversationController extends AbstractController
         $conversationsWithUnreadCount = [];
         foreach ($conversations as $conversation) {
             $unreadCount = $conversation->getUnreadCountForUser($user);
-            error_log("Conversation {$conversation->getId()}: unreadCount = {$unreadCount}");
+            // error_log("Conversation {$conversation->getId()}: unreadCount = {$unreadCount}");
             
             // Créer un tableau avec les données de la conversation + le compteur
             $conversationData = [

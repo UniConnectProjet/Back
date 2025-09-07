@@ -184,8 +184,8 @@ class Conversation
             }
         }
         
-        // Debug: logger le compteur avec plus de détails
-        error_log("Conversation {$this->id}: User {$user->getId()}, Total messages: {$totalMessages}, Unread count: {$count}");
+        // Debug: logger le compteur avec plus de détails (désactivé pour réduire la charge)
+        // error_log("Conversation {$this->id}: User {$user->getId()}, Total messages: {$totalMessages}, Unread count: {$count}");
         
         return $count;
     }
