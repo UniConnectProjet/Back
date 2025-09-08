@@ -32,8 +32,12 @@ class ScheduleController extends AbstractController
         $start = (new \DateTimeImmutable('tomorrow'))->setTime(0,0,0);
         $end   = (new \DateTimeImmutable('tomorrow'))->setTime(23,59,59);
 
-        // Requête explicite
+        // Requête explicite avec jointures pour le professeur
         $sessions = $sessionsRepo->createQueryBuilder('s')
+            ->leftJoin('s.professor', 'p')
+            ->leftJoin('p.userId', 'u')
+            ->leftJoin('s.course', 'c')
+            ->addSelect('p', 'u', 'c')
             ->andWhere('s.classe = :classe')
             ->andWhere('s.startAt >= :start AND s.startAt <= :end')
             ->setParameter('classe', $classe)
@@ -46,14 +50,23 @@ class ScheduleController extends AbstractController
         // Mapping minimal (gardé proche de ton code)
         $payload = array_map(function ($s) {
             $course = method_exists($s, 'getCourse') ? $s->getCourse() : null;
-            $prof = method_exists($course, 'getProfessor') ? $course->getProfessor() : null;
+            $professor = method_exists($s, 'getProfessor') ? $s->getProfessor() : null;
+            $user = $professor ? $professor->getUserId() : null;
 
             return [
                 'title' => $course?->getName() ?? 'Cours',
                 'start' => method_exists($s, 'getStartAt') ? $s->getStartAt()?->format(\DATE_ATOM) : null,
                 'end'   => method_exists($s, 'getEndAt')   ? $s->getEndAt()?->format(\DATE_ATOM)   : null,
                 'extendedProps' => [
-                    'professor' => $prof?->getLastname() ?? $prof?->getName() ?? null,
+                    'professor' => $professor && $user ? [
+                        'id' => $professor->getId(),
+                        'name' => method_exists($user, 'getName') ? $user->getName() : null,
+                        'lastname' => method_exists($user, 'getLastname') ? $user->getLastname() : null,
+                        'fullName' => trim(sprintf('%s %s', 
+                            method_exists($user, 'getName') ? $user->getName() : '', 
+                            method_exists($user, 'getLastname') ? $user->getLastname() : ''
+                        ))
+                    ] : null,
                     'location'  => method_exists($s, 'getRoom') ? $s->getRoom() : null,
                 ],
             ];
@@ -97,6 +110,10 @@ class ScheduleController extends AbstractController
         }
 
         $sessions = $sessionsRepo->createQueryBuilder('s')
+            ->leftJoin('s.professor', 'p')
+            ->leftJoin('p.userId', 'u')
+            ->leftJoin('s.course', 'c')
+            ->addSelect('p', 'u', 'c')
             ->andWhere('s.classe = :classe')
             ->andWhere('s.startAt >= :from AND s.startAt <= :to')
             ->setParameter('classe', $classe)
@@ -108,14 +125,23 @@ class ScheduleController extends AbstractController
 
         $payload = array_map(function ($s) {
             $course = method_exists($s, 'getCourse') ? $s->getCourse() : null;
-            $prof = method_exists($course, 'getProfessor') ? $course->getProfessor() : null;
+            $professor = method_exists($s, 'getProfessor') ? $s->getProfessor() : null;
+            $user = $professor ? $professor->getUserId() : null;
 
             return [
                 'title' => $course?->getName() ?? 'Cours',
                 'start' => method_exists($s, 'getStartAt') ? $s->getStartAt()?->format(\DATE_ATOM) : null,
                 'end'   => method_exists($s, 'getEndAt')   ? $s->getEndAt()?->format(\DATE_ATOM)   : null,
                 'extendedProps' => [
-                    'professor' => $prof?->getLastname() ?? $prof?->getName() ?? null,
+                    'professor' => $professor && $user ? [
+                        'id' => $professor->getId(),
+                        'name' => method_exists($user, 'getName') ? $user->getName() : null,
+                        'lastname' => method_exists($user, 'getLastname') ? $user->getLastname() : null,
+                        'fullName' => trim(sprintf('%s %s', 
+                            method_exists($user, 'getName') ? $user->getName() : '', 
+                            method_exists($user, 'getLastname') ? $user->getLastname() : ''
+                        ))
+                    ] : null,
                     'location'  => method_exists($s, 'getRoom') ? $s->getRoom() : null,
                 ],
             ];

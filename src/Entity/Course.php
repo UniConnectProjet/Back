@@ -39,7 +39,8 @@ class Course
      * @var Collection<int, Classe>
      */
     #[ORM\ManyToMany(targetEntity: Classe::class, inversedBy: 'courses')]
-    private Collection $class_id;
+    #[ORM\JoinTable(name: 'course_classe')]
+    private Collection $classes;
 
     /**
      * @var Collection<int, Student>
@@ -53,12 +54,19 @@ class Course
     #[ORM\OneToMany(targetEntity: CourseSession::class, mappedBy: 'course')]
     private Collection $sessions;
 
+    /**
+     * @var Collection<int, Professor>
+     */
+    #[ORM\ManyToMany(targetEntity: Professor::class, mappedBy: 'courses')]
+    private Collection $professors;
+
     public function __construct()
     {
         $this->grades = new ArrayCollection();
-        $this->class_id = new ArrayCollection();
+        $this->classes = new ArrayCollection();
         $this->students = new ArrayCollection();
         $this->sessions = new ArrayCollection();
+        $this->professors = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -135,23 +143,26 @@ class Course
     /**
      * @return Collection<int, Classe>
      */
-    public function getClassId(): Collection
+    public function getClasses(): Collection
     {
-        return $this->class_id;
+        return $this->classes;
     }
 
-    public function addClassId(Classe $classId): static
+    public function addClass(Classe $class): static
     {
-        if (!$this->class_id->contains($classId)) {
-            $this->class_id->add($classId);
+        if (!$this->classes->contains($class)) {
+            $this->classes->add($class);
+            $class->addCourse($this);
         }
 
         return $this;
     }
 
-    public function removeClassId(Classe $classId): static
+    public function removeClass(Classe $class): static
     {
-        $this->class_id->removeElement($classId);
+        if ($this->classes->removeElement($class)) {
+            $class->removeCourse($this);
+        }
 
         return $this;
     }
@@ -209,6 +220,33 @@ class Course
                 $s->setCourse(null);
             }
         }
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Professor>
+     */
+    public function getProfessors(): Collection
+    {
+        return $this->professors;
+    }
+
+    public function addProfessor(Professor $professor): static
+    {
+        if (!$this->professors->contains($professor)) {
+            $this->professors->add($professor);
+            $professor->addCourse($this);
+        }
+
+        return $this;
+    }
+
+    public function removeProfessor(Professor $professor): static
+    {
+        if ($this->professors->removeElement($professor)) {
+            $professor->removeCourse($this);
+        }
+
         return $this;
     }
 }

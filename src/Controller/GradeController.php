@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\Student;
 use App\Entity\Course;
+use App\Entity\Semester;
 
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -15,9 +16,12 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Doctrine\ORM\EntityManagerInterface;
 
-#[Route('/api/grades')]
+#[Route('/api/grade')]
 class GradeController extends AbstractController
 {
+    public function __construct(
+        private EntityManagerInterface $em
+    ) {}
     #[Route('/grade', name: 'app_grade')]
     public function index(): JsonResponse
     {
@@ -43,7 +47,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/student/{studentId}', name: 'grade.getByStudent', methods:['GET'])]
+    #[Route('/by-student/{studentId}', name: 'grade.getByStudent', methods:['GET'])]
     public function getGradesByStudentId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -60,7 +64,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/course/{courseId}', name: 'grade.getByCourse', methods:['GET'])]
+    #[Route('/by-course/{courseId}', name: 'grade.getByCourse', methods:['GET'])]
     public function getGradesByCourseId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -77,7 +81,7 @@ class GradeController extends AbstractController
         );
     }
 
-    #[Route('/semester/{semesterId}', name: 'grade.getBySemester', methods:['GET'])]
+    #[Route('/by-semester/{semesterId}', name: 'grade.getBySemester', methods:['GET'])]
     public function getGradesBySemesterId(
         GradeRepository $repository,
         SerializerInterface $serializer,
@@ -101,23 +105,57 @@ class GradeController extends AbstractController
         int $studentId
         ): JsonResponse
     {
-        $data = $request->getContent();
-        $grade = $serializer->deserialize($data, Grade::class, 'json');
-        $student = $em->getRepository(Student::class)->find($studentId);
+        $data = json_decode($request->getContent(), true);
         
+        if (!$data) {
+            return new JsonResponse(['error' => 'Invalid JSON data'], Response::HTTP_BAD_REQUEST);
+        }
+        
+        $student = $em->getRepository(Student::class)->find($studentId);
         if (!$student) {
             return new JsonResponse(['error' => 'Student not found'], Response::HTTP_NOT_FOUND);
         }
+        
+        $course = null;
+        if (isset($data['course'])) {
+            $course = $em->getRepository(Course::class)->find($data['course']);
+            if (!$course) {
+                return new JsonResponse(['error' => 'Course not found'], Response::HTTP_NOT_FOUND);
+            }
+        }
+        
+        $grade = new Grade();
         $grade->setStudent($student);
+        $grade->setCourse($course);
+        $grade->setGrade($data['grade'] ?? 0);
+        $grade->setDividor($data['dividor'] ?? 1);
+        $grade->setTitle($data['title'] ?? '');
+        $grade->setCreatedAt(new \DateTimeImmutable());
+        
+        // Déterminer le semestre basé sur la date actuelle
+        $currentDate = new \DateTime();
+        $year = $currentDate->format('Y');
+        $month = (int) $currentDate->format('n');
+        $day = (int) $currentDate->format('j');
+        
+        $semester = null;
+        if (($month === 9 && $day >= 2) || $month === 10 || $month === 11 || $month === 12 || ($month === 1 && $day <= 21)) {
+            $semester = $em->getRepository(Semester::class)->findOneBy(['name' => 'S1']);
+        } else {
+            $semester = $em->getRepository(Semester::class)->findOneBy(['name' => 'S2']);
+        }
+        
+        if ($semester) {
+            $grade->setSemester($semester);
+        }
 
         $em->persist($grade);
         $em->flush();
-        return new JsonResponse(
-            'Grade added',
-            Response::HTTP_CREATED,
-            [],
-            true
-        );
+        
+        return new JsonResponse([
+            'message' => 'Grade added successfully',
+            'gradeId' => $grade->getId()
+        ], Response::HTTP_CREATED);
     }
 
     #[Route('/course/{courseId}', name: 'grade.addForCourse', methods:['POST'])]
@@ -195,6 +233,148 @@ class GradeController extends AbstractController
             [],
             true
         );
+    }
+
+    #[Route('/save', name: 'save_grades', methods: ['POST'])]
+    public function saveGrades(Request $request): JsonResponse
+    {
+        try {
+            $data = json_decode($request->getContent(), true);
+            
+            if (!$data) {
+                return $this->json(['error' => 'Données JSON invalides'], 400);
+            }
+            
+            if (!isset($data['classId']) || !isset($data['assignments']) || !isset($data['grades'])) {
+                return $this->json(['error' => 'Données manquantes: classId, assignments ou grades'], 400);
+            }
+
+            $classId = $data['classId'];
+            $courseId = $data['courseId'] ?? null;
+            $assignments = $data['assignments'];
+            $grades = $data['grades'];
+            
+            // Log pour déboguer
+            error_log('GradeController::saveGrades - classId: ' . $classId);
+            error_log('GradeController::saveGrades - assignments: ' . json_encode($assignments));
+            error_log('GradeController::saveGrades - grades: ' . json_encode($grades));
+            // Récupérer la classe
+            $classe = $this->em->getRepository(\App\Entity\Classe::class)->find($classId);
+            if (!$classe) {
+                return $this->json(['error' => 'Classe non trouvée'], 404);
+            }
+
+            // Récupérer le cours seulement si courseId est fourni
+            $course = null;
+            if ($courseId) {
+                $course = $this->em->getRepository(\App\Entity\Course::class)->find($courseId);
+                if (!$course) {
+                    return $this->json(['error' => 'Cours non trouvé'], 404);
+                }
+            } else {
+                // Si pas de cours spécifique, utiliser un cours par défaut ou le premier cours de la classe
+                $course = $this->em->getRepository(\App\Entity\Course::class)
+                    ->createQueryBuilder('c')
+                    ->join('c.classes', 'cl')
+                    ->where('cl.id = :classId')
+                    ->setParameter('classId', $classId)
+                    ->setMaxResults(1)
+                    ->getQuery()
+                    ->getOneOrNullResult();
+                
+                if (!$course) {
+                    return $this->json(['error' => 'Aucun cours trouvé pour cette classe. Veuillez d\'abord créer un cours.'], 404);
+                }
+            }
+
+            $savedGrades = [];
+
+            // Parcourir les notes de chaque étudiant
+            foreach ($grades as $studentId => $studentGrades) {
+                $student = $this->em->getRepository(\App\Entity\Student::class)->find($studentId);
+                if (!$student) continue;
+
+                // Parcourir les notes de chaque devoir
+                foreach ($studentGrades as $assignmentId => $gradeData) {
+                    if (empty($gradeData['score'])) continue; // Ignorer les notes vides
+
+                    // Trouver le devoir correspondant
+                    $assignment = array_filter($assignments, fn($a) => $a['id'] == $assignmentId);
+                    if (empty($assignment)) continue;
+                    $assignment = reset($assignment);
+
+                    // Créer ou mettre à jour la note
+                    $existingGrade = $this->em->getRepository(\App\Entity\Grade::class)
+                        ->findOneBy([
+                            'student' => $student,
+                            'course' => $course,
+                            'title' => $assignment['title']
+                        ]);
+
+                    if ($existingGrade) {
+                        $existingGrade->setGrade($gradeData['score']);
+                    } else {
+                        $grade = new \App\Entity\Grade();
+                        $grade->setStudent($student);
+                        $grade->setCourse($course);
+                        $grade->setTitle($assignment['title']);
+                        $grade->setGrade($gradeData['score']);
+                        $grade->setDividor($assignment['maxPoints']);
+                        
+                        $this->em->persist($grade);
+                    }
+
+                    $savedGrades[] = [
+                        'studentId' => $studentId,
+                        'assignmentId' => $assignmentId,
+                        'score' => $gradeData['score'],
+                        'comment' => $gradeData['comment'] ?? ''
+                    ];
+                }
+            }
+
+            $this->em->flush();
+
+            return $this->json([
+                'success' => true,
+                'message' => 'Notes enregistrées avec succès',
+                'savedGrades' => $savedGrades
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'error' => 'Erreur lors de l\'enregistrement: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    #[Route('/student/{studentId}', name: 'get_student_grades', methods: ['GET'])]
+    public function getStudentGrades(int $studentId): JsonResponse
+    {
+        $student = $this->em->getRepository(\App\Entity\Student::class)->find($studentId);
+        if (!$student) {
+            return $this->json(['error' => 'Étudiant non trouvé'], 404);
+        }
+
+        $grades = $this->em->getRepository(\App\Entity\Grade::class)
+            ->createQueryBuilder('g')
+            ->select('g.title, g.grade as score, g.dividor as outOf, c.name as courseName')
+            ->leftJoin('g.course', 'c')
+            ->where('g.student = :student')
+            ->setParameter('student', $student)
+            ->orderBy('g.id', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        return $this->json([
+            'student' => [
+                'id' => $student->getId(),
+                'name' => $student->getUser()?->getName(),
+                'lastname' => $student->getUser()?->getLastname(),
+                'email' => $student->getUser()?->getEmail()
+            ],
+            'grades' => $grades
+        ]);
     }
 
 }

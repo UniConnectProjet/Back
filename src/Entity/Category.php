@@ -6,6 +6,7 @@ use App\Repository\CategoryRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Serializer\Annotation\Groups;
 
 #[ORM\Entity(repositoryClass: CategoryRepository::class)]
 class Category
@@ -13,9 +14,11 @@ class Category
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['category:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Groups(['category:read'])]
     private ?string $name = null;
 
     /**
@@ -36,11 +39,18 @@ class Category
     #[ORM\ManyToMany(targetEntity: Level::class, inversedBy: 'categories')]
     private Collection $levelId;
 
+    /**
+     * @var Collection<int, Professor>
+     */
+    #[ORM\ManyToMany(targetEntity: Professor::class, mappedBy: 'categories')]
+    private Collection $professors;
+
     public function __construct()
     {
         $this->classes = new ArrayCollection();
         $this->courseUnits = new ArrayCollection();
         $this->levelId = new ArrayCollection();
+        $this->professors = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -140,6 +150,33 @@ class Category
     public function removeLevelId(Level $levelId): static
     {
         $this->levelId->removeElement($levelId);
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Professor>
+     */
+    public function getProfessors(): Collection
+    {
+        return $this->professors;
+    }
+
+    public function addProfessor(Professor $professor): static
+    {
+        if (!$this->professors->contains($professor)) {
+            $this->professors->add($professor);
+            $professor->addCategory($this);
+        }
+
+        return $this;
+    }
+
+    public function removeProfessor(Professor $professor): static
+    {
+        if ($this->professors->removeElement($professor)) {
+            $professor->removeCategory($this);
+        }
 
         return $this;
     }

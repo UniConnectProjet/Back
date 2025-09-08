@@ -26,6 +26,10 @@ ENV APP_ENV=prod
 
 RUN mkdir -p var && chown -R www-data:www-data var
 
+# Script de démarrage avec migration
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Opcache prod (mini réglages)
 RUN { \
       echo "opcache.enable=1"; \
@@ -36,4 +40,5 @@ RUN { \
 
 # Le pool FPM écoute par défaut sur 9000 (TCP). Expose pour Nginx interne.
 EXPOSE 9000
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm", "-F"]

@@ -13,6 +13,10 @@ use App\Repository\StudentRepository;
 use Symfony\Component\Serializer\SerializerInterface;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\String\Slugger\SluggerInterface;
 
 #[Route('/api/absences')]
 class AbsenceController extends AbstractController
@@ -67,7 +71,7 @@ class AbsenceController extends AbstractController
      * 
      * @return JsonResponse La liste des absences pour le semestre.
      */
-    #[Route('/semester/{semesterId}', name: 'absence.getBySemester', methods: ['GET'])]
+    #[Route('/semester/{semesterId}', name: 'absence.getBySemester', methods: ['GET'], requirements: ['semesterId' => '\d+'])]
     public function getAbsencesBySemester(
         AbsenceRepository $repository,
         SerializerInterface $serializer,
@@ -200,5 +204,577 @@ class AbsenceController extends AbstractController
         $em->flush();
 
         return new JsonResponse(['message' => 'Absence deleted successfully'], JsonResponse::HTTP_OK);
+    }
+
+    #[Route('/{id}/justify', name: 'api_absence_justify', methods: ['POST'])]
+    public function justify(
+        int $id,
+        Request $request,
+        AbsenceRepository $absences,
+        EntityManagerInterface $em,
+        Security $security,                    // OK en Symfony 6+
+        SluggerInterface $slugger,
+        string $justificationsDir,             // bindé dans services.yaml
+    ): JsonResponse {
+        $absence = $absences->find($id);
+        if (!$absence) {
+            return $this->json(['message' => 'Absence introuvable'], 404);
+        }
+
+        // --- Autorisation: étudiant propriétaire OU admin
+        $user = $security->getUser();
+        $isOwner = method_exists($absence, 'getStudent')
+            && $absence->getStudent()
+            && method_exists($absence->getStudent(), 'getUser')
+            && $absence->getStudent()->getUser() === $user;
+        $isAdmin = $user && \in_array('ROLE_ADMIN', $user->getRoles(), true);
+
+        if (!$isOwner && !$isAdmin) {
+            return $this->json(['message' => 'Accès refusé'], 403);
+        }
+
+        // --- Règle métier: dépôt autorisé si UNJUSTIFIED ou REJECTED
+        if (!\in_array($absence->getStatus(), [Absence::STATUS_UNJUSTIFIED, Absence::STATUS_REJECTED], true)) {
+            return $this->json(['message' => 'Justification déjà déposée ou en cours de revue'], 409);
+        }
+
+        // --- Payload
+        $reason  = trim((string) $request->request->get('reason', ''));
+        $comment = $request->request->get('comment');
+        if ($reason === '') {
+            return $this->json(['errors' => ['reason' => 'La raison est requise']], 422);
+        }
+
+        // --- Fichiers (attachments OU attachments[])
+        $filesParam = $request->files->get('attachments', []);
+        if ($filesParam instanceof UploadedFile) {
+            $filesParam = [$filesParam];
+        } elseif (!\is_array($filesParam)) {
+            $filesParam = [];
+        }
+        /** @var UploadedFile[] $files */
+        $files = array_values(array_filter($filesParam, fn($f) => $f instanceof UploadedFile));
+        if (\count($files) > 3) {
+            return $this->json(['errors' => ['attachments' => 'Maximum 3 fichiers']], 422);
+        }
+
+        $allowed = ['application/pdf', 'image/jpeg', 'image/png'];
+        $maxSize = 5 * 1024 * 1024; // 5 Mo
+
+        $fs = new Filesystem();
+        $target = rtrim($justificationsDir, '/').'/'.$absence->getId();
+        if (!$fs->exists($target)) {
+            $fs->mkdir($target, 0700);
+        }
+
+        $filesMeta = [];
+        foreach ($files as $f) {
+            $mime = $f->getClientMimeType() ?? $f->getMimeType();
+            $size = $f->getSize() ?? 0;
+
+            if ($mime && !\in_array($mime, $allowed, true)) {
+                return $this->json(['errors' => ['attachments' => 'PDF/JPG/PNG uniquement']], 422);
+            }
+            if ($size > $maxSize) {
+                return $this->json(['errors' => ['attachments' => 'Taille max: 5 Mo']], 422);
+            }
+
+            $base = pathinfo($f->getClientOriginalName(), PATHINFO_FILENAME);
+            $safe = (string) $slugger->slug($base);
+            $ext  = $f->guessExtension() ?: $f->getClientOriginalExtension() ?: 'bin';
+            $name = sprintf('%s-%s.%s', $safe, bin2hex(random_bytes(4)), $ext);
+
+            $f->move($target, $name);
+
+            $filesMeta[] = [
+                'name' => $f->getClientOriginalName(),
+                'path' => $name,     // chemin relatif
+                'size' => $size,
+                'mime' => $mime,
+            ];
+        }
+
+        // --- MAJ de l’absence
+        $absence->setJustificationReason($reason);
+        $absence->setJustificationComment($comment);
+        $absence->setJustificationFiles($filesMeta);
+        $absence->setStatus(Absence::STATUS_PENDING);   // en attente admin
+        $absence->setJustifiedAt(new \DateTime());      // \DateTime mutable
+
+        if (method_exists($absence, 'setJustifiedBy'))  $absence->setJustifiedBy($user);
+        if (method_exists($absence, 'setJustified'))    $absence->setJustified(false); // bool legacy
+        if (method_exists($absence, 'setReviewComment')) $absence->setReviewComment(null);
+        if (method_exists($absence, 'setReviewedAt'))    $absence->setReviewedAt(null);
+        if (method_exists($absence, 'setReviewedBy'))    $absence->setReviewedBy(null);
+
+        $em->flush();
+
+        return $this->json([
+            'id'          => $absence->getId(),
+            'status'      => $absence->getStatus(),
+            'reason'      => $absence->getJustificationReason(),
+            'comment'     => $absence->getJustificationComment(),
+            'files'       => $filesMeta,
+            'justifiedAt' => $absence->getJustifiedAt()?->format(\DATE_ATOM),
+        ], 200);
+    }
+
+    #[Route('/me/unjustified', name: 'api_me_absences_unjustified', methods: ['GET'])]
+    #[IsGranted('ROLE_STUDENT')]
+    public function myUnjustified(
+        Request $request,
+        AbsenceRepository $repo,
+        Security $security
+    ): JsonResponse {
+        $user = $security->getUser();
+        if (!$user) {
+            return $this->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $student = method_exists($user, 'getStudent') ? $user->getStudent() : null;
+        $studentId = $student?->getId() ?: (method_exists($user, 'getId') ? (int) $user->getId() : 0);
+        if (!$studentId) {
+            return $this->json(['error' => 'No student attached to the current user'], 400);
+        }
+
+        $semesterId = $request->query->get('semesterId');
+
+        // UNJUSTIFIED (3 / "UNJUSTIFIED") en excluant PENDING (4 / "PENDING")
+        $qb = $repo->createQueryBuilder('a')
+            ->andWhere('a.student = :sid')->setParameter('sid', $studentId)
+            ->andWhere('(a.status = 3 OR a.status = :u1 OR a.status = :u2 OR a.justified = 0)')
+                ->setParameter('u1', 'UNJUSTIFIED')->setParameter('u2', 'unjustified')
+            ->andWhere('(a.status <> 4 AND a.status <> :p1 AND a.status <> :p2)')
+                ->setParameter('p1', 'PENDING')->setParameter('p2', 'pending')
+            ->orderBy('a.startedDate', 'ASC');
+
+        if ($semesterId) {
+            $qb->andWhere('a.semester = :sem')->setParameter('sem', (int) $semesterId);
+        }
+
+        $rows = $qb->getQuery()->getResult();
+
+        $data = array_map(static function (Absence $a) {
+            return [
+                'id'                   => $a->getId(),
+                'startedDate'          => $a->getStartedDate()?->format(\DateTimeInterface::ATOM),
+                'endedDate'            => $a->getEndedDate()?->format(\DateTimeInterface::ATOM),
+                'status'               => $a->getStatus(),
+                'justified'            => (bool) ($a->isJustified() ?? false),
+                'justificationReason'  => $a->getJustificationReason(),
+                'justificationComment' => $a->getJustificationComment(),
+                'justificationFiles'   => $a->getJustificationFiles(),
+                'semester'             => $a->getSemester()?->getId(),
+                'courseSession'        => $a->getCourseSession()?->getId(),
+            ];
+        }, $rows);
+
+        return $this->json(['count' => \count($data), 'data' => $data], 200);
+    }
+
+    #[Route('/semester/by-date', name: 'api_absence_semester_by_date', methods: ['GET'])]
+    public function getSemesterByDate(
+        Request $request,
+        SemesterRepository $semesterRepository
+    ): JsonResponse {
+        $dateString = $request->query->get('date');
+        
+        if (!$dateString) {
+            return $this->json(['error' => 'Date parameter is required'], 400);
+        }
+
+        try {
+            $date = new \DateTimeImmutable($dateString);
+        } catch (\Exception $e) {
+            return $this->json(['error' => 'Invalid date format'], 400);
+        }
+
+        // Trouver le semestre qui contient cette date
+        $semester = $semesterRepository->createQueryBuilder('s')
+            ->where('s.startDate <= :date')
+            ->andWhere('s.endDate >= :date')
+            ->setParameter('date', $date)
+            ->getQuery()
+            ->getOneOrNullResult();
+
+        if (!$semester) {
+            return $this->json(['error' => 'No semester found for this date'], 404);
+        }
+
+        return $this->json([
+            'id' => $semester->getId(),
+            'name' => $semester->getName(),
+            'startDate' => $semester->getStartDate()->format('Y-m-d'),
+            'endDate' => $semester->getEndDate()->format('Y-m-d')
+        ]);
+    }
+
+    /**
+     * Test de connexion à la base de données pour les statistiques d'absences
+     */
+    #[Route('/test-connection', name: 'absence.test_connection', methods: ['GET'])]
+    public function testConnection(EntityManagerInterface $entityManager): JsonResponse
+    {
+        try {
+            $classCount = $entityManager->createQueryBuilder()
+                ->select('COUNT(c.id)')
+                ->from('App\Entity\Classe', 'c')
+                ->getQuery()
+                ->getSingleScalarResult();
+
+            $studentCount = $entityManager->createQueryBuilder()
+                ->select('COUNT(s.id)')
+                ->from('App\Entity\Student', 's')
+                ->getQuery()
+                ->getSingleScalarResult();
+
+            $absenceCount = $entityManager->createQueryBuilder()
+                ->select('COUNT(a.id)')
+                ->from('App\Entity\Absence', 'a')
+                ->getQuery()
+                ->getSingleScalarResult();
+
+            return new JsonResponse([
+                'success' => true,
+                'message' => 'Connexion à la base de données réussie',
+                'data' => [
+                    'classes' => $classCount,
+                    'students' => $studentCount,
+                    'absences' => $absenceCount
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    /**
+     * Récupère les classes avec leurs étudiants et absences
+     */
+    #[Route('/classes-with-students-absences', name: 'absence.classes_with_students_absences', methods: ['GET'])]
+    public function getClassesWithStudentsAbsences(EntityManagerInterface $entityManager): JsonResponse
+    {
+        try {
+            // Récupérer toutes les classes
+            $classes = $entityManager->createQueryBuilder()
+                ->select('c.id, c.name')
+                ->from('App\Entity\Classe', 'c')
+                ->orderBy('c.name', 'ASC')
+                ->getQuery()
+                ->getResult();
+
+            $result = [];
+            
+            foreach ($classes as $class) {
+                // Récupérer les étudiants de cette classe avec leurs informations utilisateur
+                $students = $entityManager->createQueryBuilder()
+                    ->select('s.id, u.name, u.lastname, u.email')
+                    ->from('App\Entity\Student', 's')
+                    ->leftJoin('s.user', 'u')
+                    ->where('s.classe = :classId')
+                    ->setParameter('classId', $class['id'])
+                    ->orderBy('u.lastname', 'ASC')
+                    ->getQuery()
+                    ->getResult();
+
+                // Récupérer les statistiques d'absences pour cette classe
+                $absenceStats = $entityManager->createQueryBuilder()
+                    ->select('
+                        COUNT(a.id) as totalAbsences,
+                        SUM(CASE WHEN a.justified = true THEN 1 ELSE 0 END) as justifiedAbsences,
+                        SUM(CASE WHEN a.justified = false THEN 1 ELSE 0 END) as unjustifiedAbsences
+                    ')
+                    ->from('App\Entity\Absence', 'a')
+                    ->leftJoin('a.student', 's')
+                    ->where('s.classe = :classId')
+                    ->setParameter('classId', $class['id'])
+                    ->getQuery()
+                    ->getSingleResult();
+
+                // Récupérer les absences par étudiant
+                $studentAbsences = $entityManager->createQueryBuilder()
+                    ->select('
+                        s.id as studentId,
+                        COUNT(a.id) as totalAbsences,
+                        SUM(CASE WHEN a.justified = true THEN 1 ELSE 0 END) as justifiedAbsences,
+                        SUM(CASE WHEN a.justified = false THEN 1 ELSE 0 END) as unjustifiedAbsences,
+                        MAX(a.startedDate) as lastAbsenceDate
+                    ')
+                    ->from('App\Entity\Student', 's')
+                    ->leftJoin('s.absences', 'a')
+                    ->where('s.classe = :classId')
+                    ->setParameter('classId', $class['id'])
+                    ->groupBy('s.id')
+                    ->getQuery()
+                    ->getResult();
+
+                // Créer un mapping des absences par étudiant
+                $absenceMap = [];
+                foreach ($studentAbsences as $stat) {
+                    $absenceMap[$stat['studentId']] = $stat;
+                }
+
+                // Formater les étudiants avec leurs absences
+                $formattedStudents = [];
+                foreach ($students as $student) {
+                    $studentId = $student['id'];
+                    $absenceData = $absenceMap[$studentId] ?? [
+                        'totalAbsences' => 0,
+                        'justifiedAbsences' => 0,
+                        'unjustifiedAbsences' => 0,
+                        'lastAbsenceDate' => null
+                    ];
+
+                    $formattedStudents[] = [
+                        'studentId' => $studentId,
+                        'studentName' => $student['name'] . ' ' . $student['lastname'],
+                        'studentEmail' => $student['email'],
+                        'totalAbsences' => (int) $absenceData['totalAbsences'],
+                        'justifiedAbsences' => (int) $absenceData['justifiedAbsences'],
+                        'unjustifiedAbsences' => (int) $absenceData['unjustifiedAbsences'],
+                        'lastAbsenceDate' => $absenceData['lastAbsenceDate'] ? 
+                            $absenceData['lastAbsenceDate']->format('d/m/Y') : null
+                    ];
+                }
+
+                $result[] = [
+                    'classId' => $class['id'],
+                    'className' => $class['name'],
+                    'totalStudents' => count($students),
+                    'totalAbsences' => (int) $absenceStats['totalAbsences'],
+                    'justifiedAbsences' => (int) $absenceStats['justifiedAbsences'],
+                    'unjustifiedAbsences' => (int) $absenceStats['unjustifiedAbsences'],
+                    'students' => $formattedStudents
+                ];
+            }
+
+            return new JsonResponse([
+                'success' => true,
+                'classes' => $result,
+                'total' => count($result),
+                'message' => 'Données réelles récupérées avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    /**
+     * Récupère la liste des classes uniquement
+     */
+    #[Route('/classes-only', name: 'absence.classes_only', methods: ['GET'])]
+    public function getClassesOnly(EntityManagerInterface $entityManager): JsonResponse
+    {
+        try {
+            $classes = $entityManager->createQueryBuilder()
+                ->select('c.id, c.name')
+                ->from('App\Entity\Classe', 'c')
+                ->orderBy('c.name', 'ASC')
+                ->getQuery()
+                ->getResult();
+
+            return new JsonResponse([
+                'success' => true,
+                'classes' => $classes,
+                'total' => count($classes)
+            ]);
+
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    /**
+     * Récupère la liste des étudiants avec leurs classes
+     */
+    #[Route('/students-only', name: 'absence.students_only', methods: ['GET'])]
+    public function getStudentsOnly(EntityManagerInterface $entityManager): JsonResponse
+    {
+        try {
+            $students = $entityManager->createQueryBuilder()
+                ->select('s.id, u.name, u.lastname, u.email, c.id as classId, c.name as className')
+                ->from('App\Entity\Student', 's')
+                ->leftJoin('s.user', 'u')
+                ->leftJoin('s.classe', 'c')
+                ->orderBy('u.lastname', 'ASC')
+                ->setMaxResults(50) // Limiter pour éviter les surcharges
+                ->getQuery()
+                ->getResult();
+
+            return new JsonResponse([
+                'success' => true,
+                'students' => $students,
+                'total' => count($students)
+            ]);
+
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    /**
+     * Récupère la liste des absences avec les étudiants
+     */
+    #[Route('/absences-only', name: 'absence.absences_only', methods: ['GET'])]
+    public function getAbsencesOnly(EntityManagerInterface $entityManager): JsonResponse
+    {
+        try {
+            $absences = $entityManager->createQueryBuilder()
+                ->select('a.id, a.justified, s.id as studentId, u.name, u.lastname')
+                ->from('App\Entity\Absence', 'a')
+                ->leftJoin('a.student', 's')
+                ->leftJoin('s.user', 'u')
+                ->orderBy('a.startedDate', 'DESC')
+                ->setMaxResults(100) // Limiter pour éviter les surcharges
+                ->getQuery()
+                ->getResult();
+
+            return new JsonResponse([
+                'success' => true,
+                'absences' => $absences,
+                'total' => count($absences)
+            ]);
+
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
+    }
+
+    /**
+     * Endpoint simple pour récupérer les classes avec étudiants et absences (version simplifiée)
+     */
+    #[Route('/simple-classes-with-students', name: 'absence.simple_classes_with_students', methods: ['GET'])]
+    public function getSimpleClassesWithStudents(EntityManagerInterface $entityManager): JsonResponse
+    {
+        try {
+            // Récupérer toutes les classes
+            $classes = $entityManager->createQueryBuilder()
+                ->select('c.id, c.name')
+                ->from('App\Entity\Classe', 'c')
+                ->orderBy('c.name', 'ASC')
+                ->getQuery()
+                ->getResult();
+
+            $result = [];
+            
+            foreach ($classes as $class) {
+                // Récupérer les étudiants de cette classe avec leurs informations utilisateur
+                $students = $entityManager->createQueryBuilder()
+                    ->select('s.id, u.name, u.lastname, u.email')
+                    ->from('App\Entity\Student', 's')
+                    ->leftJoin('s.user', 'u')
+                    ->where('s.classe = :classId')
+                    ->setParameter('classId', $class['id'])
+                    ->orderBy('u.lastname', 'ASC')
+                    ->getQuery()
+                    ->getResult();
+
+                // Récupérer les statistiques d'absences pour cette classe
+                $absenceStats = $entityManager->createQueryBuilder()
+                    ->select('
+                        COUNT(a.id) as totalAbsences,
+                        SUM(CASE WHEN a.justified = true THEN 1 ELSE 0 END) as justifiedAbsences,
+                        SUM(CASE WHEN a.justified = false THEN 1 ELSE 0 END) as unjustifiedAbsences
+                    ')
+                    ->from('App\Entity\Absence', 'a')
+                    ->leftJoin('a.student', 's')
+                    ->where('s.classe = :classId')
+                    ->setParameter('classId', $class['id'])
+                    ->getQuery()
+                    ->getSingleResult();
+
+                // Récupérer les absences par étudiant
+                $studentAbsences = $entityManager->createQueryBuilder()
+                    ->select('
+                        s.id as studentId,
+                        COUNT(a.id) as totalAbsences,
+                        SUM(CASE WHEN a.justified = true THEN 1 ELSE 0 END) as justifiedAbsences,
+                        SUM(CASE WHEN a.justified = false THEN 1 ELSE 0 END) as unjustifiedAbsences,
+                        MAX(a.startedDate) as lastAbsenceDate
+                    ')
+                    ->from('App\Entity\Student', 's')
+                    ->leftJoin('s.absences', 'a')
+                    ->where('s.classe = :classId')
+                    ->setParameter('classId', $class['id'])
+                    ->groupBy('s.id')
+                    ->getQuery()
+                    ->getResult();
+
+                // Créer un mapping des absences par étudiant
+                $absenceMap = [];
+                foreach ($studentAbsences as $stat) {
+                    $absenceMap[$stat['studentId']] = $stat;
+                }
+
+                // Formater les étudiants avec leurs absences
+                $formattedStudents = [];
+                foreach ($students as $student) {
+                    $studentId = $student['id'];
+                    $absenceData = $absenceMap[$studentId] ?? [
+                        'totalAbsences' => 0,
+                        'justifiedAbsences' => 0,
+                        'unjustifiedAbsences' => 0,
+                        'lastAbsenceDate' => null
+                    ];
+
+                    $formattedStudents[] = [
+                        'studentId' => $studentId,
+                        'studentName' => $student['name'] . ' ' . $student['lastname'],
+                        'studentEmail' => $student['email'],
+                        'totalAbsences' => (int) $absenceData['totalAbsences'],
+                        'justifiedAbsences' => (int) $absenceData['justifiedAbsences'],
+                        'unjustifiedAbsences' => (int) $absenceData['unjustifiedAbsences'],
+                        'lastAbsenceDate' => $absenceData['lastAbsenceDate'] ? 
+                            $absenceData['lastAbsenceDate']->format('d/m/Y') : null
+                    ];
+                }
+
+                $result[] = [
+                    'classId' => $class['id'],
+                    'className' => $class['name'],
+                    'totalStudents' => count($students),
+                    'totalAbsences' => (int) $absenceStats['totalAbsences'],
+                    'justifiedAbsences' => (int) $absenceStats['justifiedAbsences'],
+                    'unjustifiedAbsences' => (int) $absenceStats['unjustifiedAbsences'],
+                    'students' => $formattedStudents
+                ];
+            }
+
+            return new JsonResponse([
+                'success' => true,
+                'classes' => $result,
+                'total' => count($result),
+                'message' => 'Données réelles récupérées avec succès'
+            ]);
+
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
     }
 }

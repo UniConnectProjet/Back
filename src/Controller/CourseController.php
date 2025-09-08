@@ -74,6 +74,11 @@ class CourseController extends AbstractController
         int $studentId
     ): JsonResponse {
         $courses = $repository->findByStudentId($studentId);
+        
+        if (empty($courses)) {
+            return new JsonResponse(['error' => 'No courses found for this student'], Response::HTTP_NOT_FOUND);
+        }
+        
         $jsonCourses = $serializer->serialize($courses, 'json', ["groups" => "getAllCourses"]);
 
         return new JsonResponse(

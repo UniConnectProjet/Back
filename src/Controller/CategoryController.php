@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\Category;
+use App\Repository\CategoryRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,13 +13,13 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[Route('/api/categories')]
 final class CategoryController extends AbstractController
 {
-    #[Route('/category', name: 'app_category')]
-    public function index(): JsonResponse
+    #[Route('', name: 'categories_list', methods: ['GET'])]
+    public function index(CategoryRepository $categoryRepo, SerializerInterface $serializer): JsonResponse
     {
-        return $this->json([
-            'message' => 'Welcome to your new controller!',
-            'path' => 'src/Controller/CategoryController.php',
-        ]);
+        $categories = $categoryRepo->findAll();
+        $json = $serializer->serialize($categories, 'json', ['groups' => ['category:read']]);
+        
+        return new JsonResponse($json, Response::HTTP_OK, [], true);
     }
 
     #[Route('/{id}/courses', name: 'category.courses', methods: ['GET'])]

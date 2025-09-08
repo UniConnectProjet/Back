@@ -15,6 +15,7 @@ use App\Repository\GradeRepository;
 use App\Repository\UserRepository;
 use App\Repository\SemesterRepository;
 use App\Repository\AbsenceRepository;
+use App\Repository\CourseSessionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 
@@ -23,7 +24,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[Route('/api')]
 class StudentController extends AbstractController
 {
-    private const ROUTE_FOR_A_STUDENT = '/api/students/{id}';
+    private const ROUTE_FOR_A_STUDENT = '/students/{id}';
     private StudentRepository $repository;
     private SerializerInterface $serializer;
 
@@ -65,17 +66,43 @@ class StudentController extends AbstractController
         $semesters = $student->getSemesters(); // Doctrine Collection|array
         $blocks = [];
 
+        // helpers
+        $fmt = static fn(int $m) => sprintf('%dh%02d', intdiv(max(0,$m),60), max(0,$m)%60);
+        $minutesBetween = static function (? \DateTimeInterface $s, ? \DateTimeInterface $e): int {
+            if (!$s || !$e) return 0;
+            return max(0, intdiv($e->getTimestamp() - $s->getTimestamp(), 60));
+        };
+        $normalizeStatus = static function ($a): string {
+            $raw = method_exists($a, 'getStatus') ? $a->getStatus() : null;
+
+            // int
+            if (is_int($raw)) {
+                if ($raw === 4) return 'PENDING';
+                if ($raw === 1) return 'APPROVED';
+                if ($raw === 3) return 'UNJUSTIFIED';
+            }
+            // string
+            if (is_string($raw) && $raw !== '') {
+                $up = strtoupper($raw);
+                if ($up === '4' || str_contains($up, 'PENDING'))    return 'PENDING';
+                if ($up === '1' || str_contains($up, 'APPROVED') || str_contains($up, 'APPROVED')) return 'APPROVED';
+                if ($up === '3' || str_contains($up, 'UNJUSTIFIED')) return 'UNJUSTIFIED';
+            }
+            return 'UNJUSTIFIED';
+        };
+
         foreach ($semesters as $semester) {
             $absences = $this->absences->findBy([
                 'student'  => $student,
                 'semester' => $semester,
             ]);
 
-            $items = array_map(static function ($a) {
+            // Map entités -> DTO pour le front
+            $items = array_map(static function ($a) use ($normalizeStatus) {
                 $start = method_exists($a, 'getStartedDate') ? $a->getStartedDate()
-                      : (method_exists($a, 'getStartedAt') ? $a->getStartedAt() : null);
+                    : (method_exists($a, 'getStartedAt') ? $a->getStartedAt() : null);
                 $end   = method_exists($a, 'getEndedDate')   ? $a->getEndedDate()
-                      : (method_exists($a, 'getEndedAt')   ? $a->getEndedAt()   : null);
+                    : (method_exists($a, 'getEndedAt')   ? $a->getEndedAt()   : null);
 
                 $justified = null;
                 if (method_exists($a, 'isJustified')) {
@@ -83,28 +110,47 @@ class StudentController extends AbstractController
                     $justified = is_bool($val) ? $val : (($val === 0 || $val === 1) ? (bool)$val : null);
                 }
 
+                // champs de justification (tolérant)
+                $files = method_exists($a, 'getJustificationFiles') ? $a->getJustificationFiles() : null;
+                if (is_string($files)) {
+                    $decoded = json_decode($files, true);
+                    $files = is_array($decoded) ? $decoded : [];
+                } elseif (!is_array($files)) {
+                    $files = [];
+                }
+
                 return [
-                    'id'            => $a->getId(),
-                    'startedDate'   => $start?->format(\DATE_ATOM),
-                    'endedDate'     => $end?->format(\DATE_ATOM),
-                    'justified'     => $justified,
-                    'justification' => method_exists($a, 'getJustification') ? $a->getJustification() : null,
+                    'id'                   => $a->getId(),
+                    'startedDate'          => $start?->format(\DATE_ATOM),
+                    'endedDate'            => $end?->format(\DATE_ATOM),
+                    'status'               => $normalizeStatus($a),           // "UNJUSTIFIED" | "PENDING" | "APPROVED"
+                    'justified'            => $justified,
+                    'justifiedAt'          => method_exists($a,'getJustifiedAt') ? $a->getJustifiedAt()?->format(\DATE_ATOM) : null,
+                    'justificationReason'  => method_exists($a,'getJustificationReason') ? $a->getJustificationReason() : null,
+                    'justificationComment' => method_exists($a,'getJustificationComment') ? $a->getJustificationComment() : null,
+                    'justificationFiles'   => $files,
+
+                    // pour compat’ avec ton ancienne payload
+                    'justification'        => method_exists($a, 'getJustification') ? $a->getJustification() : null,
                 ];
             }, $absences);
 
+            // Totaux (exclure PENDING du sous-total "injustifiée")
             $minutes = 0; $jMin = 0; $uMin = 0; $jCount = 0; $uCount = 0;
+
             foreach ($items as $i) {
                 $s = !empty($i['startedDate']) ? new \DateTimeImmutable($i['startedDate']) : null;
                 $e = !empty($i['endedDate'])   ? new \DateTimeImmutable($i['endedDate'])   : null;
-                if ($s && $e) {
-                    $m = max(0, intdiv($e->getTimestamp() - $s->getTimestamp(), 60));
-                    $minutes += $m;
-                    if ($i['justified'] === true)  { $jMin += $m; $jCount++; }
-                    if ($i['justified'] === false) { $uMin += $m; $uCount++; }
+                $m = $minutesBetween($s, $e);
+                $minutes += $m;
+
+                if ($i['status'] === 'APPROVED' || $i['justified'] === true) {
+                    $jMin += $m; $jCount++;
+                } elseif ($i['status'] === 'UNJUSTIFIED') {
+                    // PENDING n'entre pas dans "unjustifiée"
+                    $uMin += $m; $uCount++;
                 }
             }
-
-            $fmt = static fn(int $m) => sprintf('%dh%02d', intdiv(max(0,$m),60), max(0,$m)%60);
 
             $blocks[] = [
                 'semester' => [
@@ -119,10 +165,10 @@ class StudentController extends AbstractController
                     'justified'   => ['minutes' => $jMin, 'hhmm' => $fmt($jMin), 'count' => $jCount],
                     'unjustified' => ['minutes' => $uMin, 'hhmm' => $fmt($uMin), 'count' => $uCount],
                 ],
-                'absences' => $items, 
+                'absences' => $items,
             ];
         }
-        
+
         usort($blocks, function ($a, $b) {
             $ad = $a['semester']['startDate'] ?? null;
             $bd = $b['semester']['startDate'] ?? null;
@@ -132,6 +178,7 @@ class StudentController extends AbstractController
 
         return $blocks;
     }
+
 
     #[Route('/student', name: 'app_student')]
     public function index(): JsonResponse
@@ -169,12 +216,35 @@ class StudentController extends AbstractController
             return new JsonResponse(['message' => 'No student for this user'], 404);
         }
 
+        // Récupérer les informations de l'utilisateur
+        $email = method_exists($user, 'getEmail') ? (string) $user->getEmail() : '';
+        $name = method_exists($user, 'getName') ? $user->getName() : null;
+        $lastname = method_exists($user, 'getLastname') ? $user->getLastname() : null;
+
+        // Fallback via Student si les champs ne sont pas sur User
+        if ((!$name || !$lastname) && method_exists($student, 'getName')) {
+            if (!$name) $name = $student->getName();
+            if (!$lastname) $lastname = $student->getLastname();
+        }
+
+        $fullName = trim(sprintf('%s %s', (string) $name, (string) $lastname));
+        $displayName = $fullName !== '' ? $fullName : (str_contains($email, '@') ? explode('@', $email)[0] : 'user');
+
         return new JsonResponse([
-            'id'     => $student->getId(),
-            'classe' => $student->getClasse() ? [
-                'id'   => $student->getClasse()->getId(),
-                'name' => $student->getClasse()->getName(),
-            ] : null,
+            'id'          => $user->getId(),
+            'email'       => $email,
+            'roles'       => method_exists($user, 'getRoles') ? $user->getRoles() : [],
+            'name'        => $name,
+            'lastname'    => $lastname,
+            'fullName'    => $fullName !== '' ? $fullName : null,
+            'displayName' => $displayName,
+            'student'     => [
+                'id'     => $student->getId(),
+                'classe' => $student->getClasse() ? [
+                    'id'   => $student->getClasse()->getId(),
+                    'name' => $student->getClasse()->getName(),
+                ] : null,
+            ],
         ], 200);
     }
     
@@ -430,6 +500,80 @@ class StudentController extends AbstractController
         }
 
         return $semesters;
+    }
+
+    #[Route('/me/schedule', name: 'me_schedule', methods: ['GET'])]
+    public function meSchedule(
+        Request $request,
+        CourseSessionRepository $sessionsRepo
+    ): JsonResponse {
+        $user = $this->getUser();
+        $student = $this->students->findOneBy(['user' => $user]);
+        if (!$student) {
+            return $this->json(['message' => 'Not a student'], Response::HTTP_NOT_FOUND);
+        }
+
+        $from = $request->query->get('from');
+        $to   = $request->query->get('to');
+        if (!$from || !$to) {
+            return $this->json(['message' => 'Missing dates'], Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $fromDt = (new \DateTimeImmutable($from))->setTime(0,0,0);
+            $toDt   = (new \DateTimeImmutable($to))->setTime(23,59,59);
+        } catch (\Exception) {
+            return $this->json(['message' => 'Invalid dates'], Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($fromDt > $toDt) {
+            return $this->json(['message' => 'Invalid range'], Response::HTTP_BAD_REQUEST);
+        }
+
+        $classe = method_exists($student, 'getClasse') ? $student->getClasse() : null;
+        if (!$classe) {
+            return $this->json([], Response::HTTP_OK);
+        }
+
+        $sessions = $sessionsRepo->createQueryBuilder('s')
+            ->leftJoin('s.professor', 'p')
+            ->leftJoin('p.userId', 'u')
+            ->leftJoin('s.course', 'c')
+            ->addSelect('p', 'u', 'c')
+            ->andWhere('s.classe = :classe')
+            ->andWhere('s.startAt >= :from AND s.startAt <= :to')
+            ->setParameter('classe', $classe)
+            ->setParameter('from', $fromDt)
+            ->setParameter('to', $toDt)
+            ->orderBy('s.startAt', 'ASC')
+            ->getQuery()
+            ->getResult();
+
+        $payload = array_map(function ($s) {
+            $course = method_exists($s, 'getCourse') ? $s->getCourse() : null;
+            $professor = method_exists($s, 'getProfessor') ? $s->getProfessor() : null;
+            $user = $professor ? $professor->getUserId() : null;
+
+            return [
+                'title' => $course?->getName() ?? 'Cours',
+                'start' => method_exists($s, 'getStartAt') ? $s->getStartAt()?->format(\DATE_ATOM) : null,
+                'end'   => method_exists($s, 'getEndAt')   ? $s->getEndAt()?->format(\DATE_ATOM)   : null,
+                'extendedProps' => [
+                    'professor' => $professor && $user ? [
+                        'id' => $professor->getId(),
+                        'name' => method_exists($user, 'getName') ? $user->getName() : null,
+                        'lastname' => method_exists($user, 'getLastname') ? $user->getLastname() : null,
+                        'fullName' => trim(sprintf('%s %s', 
+                            method_exists($user, 'getName') ? $user->getName() : '', 
+                            method_exists($user, 'getLastname') ? $user->getLastname() : ''
+                        ))
+                    ] : null,
+                    'location'  => method_exists($s, 'getRoom') ? $s->getRoom() : null,
+                ],
+            ];
+        }, $sessions);
+
+        return $this->json($payload, Response::HTTP_OK);
     }
 
 }
