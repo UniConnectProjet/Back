@@ -541,16 +541,15 @@ class ProfessorSessionController extends AbstractController
     }
 
     #[Route('/classes', name: 'prof_classes_list', methods: ['GET'])]
-    public function getMyClasses(): JsonResponse
+    public function getMyClasses(ProfessorRepository $profRepo): JsonResponse
     {
-        // TEMPORAIRE: Test sans authentification
-        $userRepo = $this->em->getRepository(\App\Entity\User::class);
-        $user = $userRepo->findOneBy(['email' => 'prof01@example.com']);
-        if (!$user) return $this->json(['error' => 'Test user not found'], 404);
+        /** @var User $me */
+        $me = $this->getUser();
+        if (!$me) return $this->json(['error' => 'Unauthenticated'], 401);
 
-        $profRepo = $this->em->getRepository(\App\Entity\Professor::class);
-        $prof = $profRepo->findOneBy(['userId' => $user]);
-        if (!$prof) return $this->json(['error' => 'Test professor not found'], 404);
+        /** @var Professor|null $prof */
+        $prof = $profRepo->findOneBy(['userId' => $me]);
+        if (!$prof) return $this->json(['error' => 'Current user is not a professor'], 403);
 
         // Récupérer les classes du professeur via ses cours (requête optimisée)
         $classesData = $this->em->getRepository(\App\Entity\Classe::class)
@@ -612,21 +611,15 @@ class ProfessorSessionController extends AbstractController
     }
 
     #[Route('/classes/{classId}/courses', name: 'prof_class_courses', methods: ['GET'])]
-    public function getClassCourses(int $classId): JsonResponse
+    public function getClassCourses(int $classId, ProfessorRepository $profRepo): JsonResponse
     {
-        // Trouver un professeur de test
-        $userRepo = $this->em->getRepository(\App\Entity\User::class);
-        $user = $userRepo->findOneBy(['email' => 'prof01@example.com']);
+        /** @var User $me */
+        $me = $this->getUser();
+        if (!$me) return $this->json(['error' => 'Unauthenticated'], 401);
 
-        if (!$user) {
-            return $this->json(['error' => 'Test user not found'], 404);
-        }
-
-        $profRepo = $this->em->getRepository(\App\Entity\Professor::class);
-        $prof = $profRepo->findOneBy(['userId' => $user]);
-        if (!$prof) {
-            return $this->json(['error' => 'Test professor not found'], 404);
-        }
+        /** @var Professor|null $prof */
+        $prof = $profRepo->findOneBy(['userId' => $me]);
+        if (!$prof) return $this->json(['error' => 'Current user is not a professor'], 403);
 
         // Récupérer les cours du professeur pour cette classe
         $courses = $this->em->getRepository(\App\Entity\Course::class)
