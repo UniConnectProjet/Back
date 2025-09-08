@@ -120,13 +120,29 @@ class ProfessorSessionController extends AbstractController
             ->getQuery()
             ->getResult();
 
+        // Récupérer les IDs des sessions pour vérifier les appels de présence
+        $sessionIds = array_map(fn($s) => $s->getId(), $sessions);
+        
+        // Vérifier quelles sessions ont déjà un appel de présence
+        $sessionsWithRoll = [];
+        if (!empty($sessionIds)) {
+            $absences = $this->em->getRepository(\App\Entity\Absence::class)
+                ->createQueryBuilder('a')
+                ->select('DISTINCT IDENTITY(a.courseSession) as sessionId')
+                ->where('a.courseSession IN (:sessionIds)')
+                ->setParameter('sessionIds', $sessionIds)
+                ->getQuery()
+                ->getResult();
+            
+            $sessionsWithRoll = array_column($absences, 'sessionId');
+        }
+
         // Format identique à l'endpoint étudiant
-        $data = array_map(function (CourseSession $s) {
+        $data = array_map(function (CourseSession $s) use ($sessionsWithRoll) {
             $course = $s->getCourse();
             $classe = $s->getClasse();
             $professor = $s->getProfessor(); // Récupérer le professeur de la séance
             $user = $professor ? $professor->getUserId() : null; // Récupérer l'utilisateur associé
-
 
             return [
                 'id' => $s->getId(),
@@ -135,6 +151,7 @@ class ProfessorSessionController extends AbstractController
                 'startAt' => $s->getStartAt()?->format(\DateTimeInterface::ATOM),
                 'endAt' => $s->getEndAt()?->format(\DateTimeInterface::ATOM),
                 'room' => method_exists($s, 'getRoom') ? $s->getRoom() : null,
+                'hasRoll' => in_array($s->getId(), $sessionsWithRoll),
                 'professor' => $professor && $user ? [
                     'id' => $professor->getId(),
                     'name' => method_exists($user, 'getName') ? $user->getName() : null,
